@@ -107,7 +107,6 @@
             z-index: 5;
         }
 
-        /* INAYOS: Ibinalik ang fullscreen button sa dati nitong style */
         #fullscreen-button {
             bottom: 20px;
             right: 20px;
@@ -400,7 +399,6 @@
             <div id="message-box"></div>
             <div id="card-hand-container"></div>
             <div id="cue-ball-guide" class="guide-text"></div>
-            <!-- INAYOS: Ibinalik ang fullscreen button sa loob ng UI container -->
             <button id="fullscreen-button" class="ui-button" title="Toggle Fullscreen">
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 16 16" style="color: white;">
                     <path d="M1.5 1a.5.5 0 0 0-.5.5v4a.5.5 0 0 1-1 0v-4A1.5 1.5 0 0 1 1.5 0h4a.5.5 0 0 1 0 1h-4zM10 .5a.5.5 0 0 1 .5-.5h4A1.5 1.5 0 0 1 16 1.5v4a.5.5 0 0 1-1 0v-4a.5.5 0 0 0-.5-.5h-4a.5.5 0 0 1-.5-.5zM.5 10a.5.5 0 0 1 .5.5v4a.5.5 0 0 0 .5.5h4a.5.5 0 0 1 0 1h-4A1.5 1.5 0 0 1 0 14.5v-4a.5.5 0 0 1 .5-.5zm15 0a.5.5 0 0 1 .5.5v4a1.5 1.5 0 0 1-1.5 1.5h-4a.5.5 0 0 1 0-1h4a.5.5 0 0 0 .5-.5v-4a.5.5 0 0 1 .5-.5z"/>
@@ -847,8 +845,9 @@
                 y: oldTableHeight > 0 ? c.y / oldTableHeight : 0.5
             }));
 
-            const containerWidth = gameWrapper.clientWidth;
-            const containerHeight = gameWrapper.clientHeight;
+            // INAYOS: Direkta nang kinukuha ang sukat ng buong window
+            const containerWidth = window.innerWidth;
+            const containerHeight = window.innerHeight;
             const screenAspectRatio = containerWidth / containerHeight;
 
             if (screenAspectRatio > TABLE_ASPECT_RATIO) {
@@ -1106,7 +1105,7 @@
                 ctx.strokeStyle = 'rgba(255, 255, 0, 0.9)';
                 ctx.beginPath();
                 ctx.moveTo(objectChip.x, objectChip.y);
-                const yellowLineLength = 90; 
+                const yellowLineLength = 45; 
                 ctx.lineTo(objectChip.x + unitNormal.x * yellowLineLength * guidelineLength, objectChip.y + unitNormal.y * yellowLineLength * guidelineLength);
                 ctx.stroke();
                 
