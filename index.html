@@ -1105,7 +1105,7 @@
                 ctx.strokeStyle = 'rgba(255, 255, 0, 0.9)';
                 ctx.beginPath();
                 ctx.moveTo(objectChip.x, objectChip.y);
-                const yellowLineLength = 45; 
+                const yellowLineLength = 40; 
                 ctx.lineTo(objectChip.x + unitNormal.x * yellowLineLength * guidelineLength, objectChip.y + unitNormal.y * yellowLineLength * guidelineLength);
                 ctx.stroke();
                 
@@ -2129,8 +2129,11 @@
             canvas.addEventListener('touchstart', handlePointerDown, { passive: false });
             powerControl.addEventListener('mousedown', handlePointerDown);
             powerControl.addEventListener('touchstart', handlePointerDown, { passive: false });
+            
+            // INAYOS: Itinama ang event listener para sa pektus control
             pektusControl.addEventListener('mousedown', handlePointerDown);
-            powerControl.addEventListener('touchstart', handlePointerDown, { passive: false });
+            pektusControl.addEventListener('touchstart', handlePointerDown, { passive: false });
+            
             leftArrow.addEventListener('mousedown', handlePointerDown);
             leftArrow.addEventListener('touchstart', handlePointerDown, { passive: false });
             rightArrow.addEventListener('mousedown', handlePointerDown);
