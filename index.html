@@ -7,15 +7,6 @@
     <!-- Tone.js for audio synthesis -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
     
-    <!-- Google AdSense for H5 Games API -->
-    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9403926610801493" crossorigin="anonymous"></script>
-    <script>
-        window.adsbygoogle = window.adsbygoogle || [];
-        const adConfig = function(o) {
-            adsbygoogle.push(o);
-        };
-    </script>
-    
     <style>
         body, html {
             margin: 0;
@@ -112,7 +103,7 @@
         #fullscreen-button {
             top: 50%;
             right: 5px;
-            translateY(-50%);
+            transform: translateY(-50%);
             background-color: rgba(0, 0, 0, 0.6);
             width: 40px;
             height: 40px;
@@ -123,24 +114,6 @@
             z-index: 9999;
             border: 2px solid rgba(255, 255, 255, 0.5);
             box-shadow: 0 0 10px rgba(0,0,0,0.5);
-        }
-        
-        /* Style para sa Rewarded Ad Button */
-        #reward-ad-button {
-            top: 5px;
-            left: 5px;
-            background-color: rgba(255, 215, 0, 0.6);
-            border-color: rgba(255, 215, 0, 1);
-            width: 35px;
-            height: 35px;
-            border-radius: 50%;
-            display: none;
-            justify-content: center;
-            align-items: center;
-            font-size: 1.5em;
-            font-weight: bold;
-            color: white;
-            text-shadow: 1px 1px 2px black;
         }
         
         #card-hand-container {
@@ -205,9 +178,9 @@
         }
 
         #pektus-control {
-            Top: 50%;
+            top: 50%;
             left: 5px;
-            translateY(-50%);
+            transform: translateY(-50%);
             width: 40px;
             height: 40px;
             background-color: rgba(255, 255, 255, 0.1);
@@ -417,8 +390,6 @@
         <div id="pektus-control" class="control-area">
             <div id="pektus-dot"></div>
         </div>
-        <!-- Rewarded Ad Button -->
-        <button id="reward-ad-button" class="control-area ui-button" title="Watch Ad to Reveal Opponent's Card">?</button>
         <div id="left-arrow" class="arrow-button control-area">&lt;</div>
         <div id="right-arrow" class="arrow-button control-area">&gt;</div>
     </div>
@@ -579,7 +550,6 @@
         const leftArrow = document.getElementById('left-arrow');
         const rightArrow = document.getElementById('right-arrow');
         const fullscreenButton = document.getElementById('fullscreen-button');
-        const rewardAdButton = document.getElementById('reward-ad-button');
 
         // =========================================================================
         // CONSTANTS & GAME STATE
@@ -626,8 +596,6 @@
         let isDraggingPektusDot = false;
         let isRotatingLeft = false;
         let isRotatingRight = false;
-        let canClaimReward = true;
-        let adsReady = false;
 
         // --- Online Multiplayer Variables ---
         let gameId = null;
@@ -644,102 +612,6 @@
         let audioInitialized = false;
         let collisionSynth, pocketSynth;
         let lastCollisionSoundTime = -1;
-
-        // =========================================================================
-        // ADS HANDLING
-        // =========================================================================
-        function initializeAds() {
-            if (DEBUG_MODE) {
-                console.log("DEBUG MODE: Ads are simulated.");
-                adsReady = true;
-                return;
-            }
-            adConfig({
-                key: "adsense-key",
-                preloadAdBreaks: 'on',
-                onReady: () => {
-                    console.log("AdSense API is ready!");
-                    adsReady = true;
-                },
-            });
-        }
-
-        function showRewardedAd() {
-            if (!canClaimReward) {
-                showMessage("Reward already claimed for this turn.", 2000);
-                return;
-            }
-
-            const grantReward = () => {
-                showMessage("Reward Granted! Opponent's card revealed.", 3000);
-                if (opponentHand.length > 0) {
-                    const cardToReveal = opponentHand[Math.floor(Math.random() * opponentHand.length)];
-                    revealOpponentCard(cardToReveal);
-                }
-                canClaimReward = false;
-                rewardAdButton.style.opacity = '0.5';
-                rewardAdButton.style.cursor = 'not-allowed';
-            };
-
-            if (DEBUG_MODE) {
-                showMessage("Simulating ad...", 2000);
-                setTimeout(() => {
-                    grantReward();
-                }, 2000);
-                return;
-            }
-
-            if (!adsReady) {
-                showMessage("Ads are still loading, please wait a moment.", 2000);
-                return;
-            }
-
-            showMessage("Loading ad...", 15000);
-            try {
-                adsbygoogle.push({
-                    type: 'reward',
-                    adBreakDone: (placementInfo) => {
-                        messageBox.style.display = 'none';
-                        if (placementInfo.breakStatus === 'viewed') {
-                            grantReward();
-                        } else {
-                            showMessage("Ad not completed. No reward.", 2000);
-                        }
-                    }
-                });
-            } catch (error) {
-                console.error("Error calling ad:", error);
-                showMessage("Could not show ad. Please try again.", 3000);
-            }
-        }
-        
-        function revealOpponentCard(card) {
-            const cardDiv = document.createElement('div');
-            cardDiv.className = 'card';
-            const rankSpan = document.createElement('span');
-            rankSpan.className = 'card-rank';
-            rankSpan.textContent = card.rank;
-            const suitSpan = document.createElement('span');
-            suitSpan.className = 'card-suit';
-            suitSpan.textContent = card.suit;
-
-            if (card.suit === '♥' || card.suit === '♦') {
-                rankSpan.style.color = '#ff5555'; 
-                suitSpan.style.color = '#ff5555';
-            }
-            cardDiv.appendChild(rankSpan);
-            cardDiv.appendChild(suitSpan);
-            
-            messageBox.innerHTML = "Opponent has this card:";
-            messageBox.appendChild(cardDiv);
-            messageBox.style.display = 'block';
-
-            setTimeout(() => {
-                messageBox.style.display = 'none';
-                messageBox.innerHTML = '';
-            }, 4000);
-        }
-
 
         // =========================================================================
         // AUDIO HANDLING
@@ -806,7 +678,6 @@
             resizeCanvas();
             setupEventListeners();
             initializeFirebase(); 
-            initializeAds();
             update();
         }
 
@@ -849,7 +720,6 @@
                 y: oldTableHeight > 0 ? c.y / oldTableHeight : 0.5
             }));
 
-            // INAYOS: Direkta nang kinukuha ang sukat ng buong window
             const containerWidth = window.innerWidth;
             const containerHeight = window.innerHeight;
             const screenAspectRatio = containerWidth / containerHeight;
@@ -1328,10 +1198,8 @@
                 createDeck();
                 dealCards();
                 updateCardDisplay();
-                rewardAdButton.style.display = 'flex';
             } else {
                 cardHandContainer.style.display = 'none';
-                rewardAdButton.style.display = 'none';
             }
             updateInfoBox();
         }
@@ -1377,6 +1245,8 @@
 
             if (pocketedObjectChips.length > 0) {
                 const pocketedIds = pocketedObjectChips.map(c => c.id);
+                // The client that took the shot calculates the new state for BOTH hands
+                // and sends this new truth to the server. The other client will just sync to this.
                 playerHand = playerHand.filter(card => !pocketedIds.includes(card.value));
                 opponentHand = opponentHand.filter(card => !pocketedIds.includes(card.value));
             }
@@ -1440,8 +1310,14 @@
                 if (!colorsAssigned && pocketedObjectChips.length > 0) {
                     const firstPocketed = pocketedObjectChips[0];
                     if (isOnlineGame) {
-                        playerChipsType = firstPocketed.type;
-                        opponentChipsType = firstPocketed.type === 'red' ? 'blue' : 'red';
+                        // The active player determines the colors for both
+                        if (localPlayerId === 'player1') {
+                            playerChipsType = firstPocketed.type;
+                            opponentChipsType = firstPocketed.type === 'red' ? 'blue' : 'red';
+                        } else {
+                            opponentChipsType = firstPocketed.type;
+                            playerChipsType = firstPocketed.type === 'red' ? 'blue' : 'red';
+                        }
                     } else {
                         if (playerTurn) {
                             playerChipsType = firstPocketed.type;
@@ -1535,10 +1411,6 @@
                 playerTurn = !playerTurn;
                 const nextPlayerName = playerTurn ? 'You' : 'Opponent';
                 showMessage(`${nextPlayerName}'s turn`, 1500);
-
-                canClaimReward = true;
-                rewardAdButton.style.opacity = '1';
-                rewardAdButton.style.cursor = 'pointer';
             }
             
             resetPektus();
@@ -1558,8 +1430,8 @@
 
 
         function checkWinCondition() {
-            const player1Name = 'You';
-            const player2Name = 'Opponent';
+            const player1Name = isOnlineGame ? 'You' : 'You';
+            const player2Name = isOnlineGame ? 'Opponent' : 'Opponent';
             let playerWon = false;
             let opponentWon = false;
 
@@ -1636,22 +1508,46 @@
 
         async function endGame(winnerTextMessage) {
             if (gameState === 'gameover') return;
+
+            // BUG FIX: The client whose turn just ended is responsible for the final update.
+            // 'turnInProgress' is true on this client from the moment they shoot until the server confirms the turn is over.
+            if (isOnlineGame && turnInProgress) {
+                try {
+                    const gameDocRef = doc(db, "games", gameId);
+                    const docSnap = await getDoc(gameDocRef);
+                    if (docSnap.exists() && docSnap.data().gameState !== 'finished') {
+                        let winnerUid = null;
+                        // Determine the winner's UID based on the win message
+                        if (winnerTextMessage.includes('You Win')) {
+                            winnerUid = localPlayerUid;
+                        } else if (winnerTextMessage.includes('Opponent Wins')) {
+                            const gameData = docSnap.data();
+                            const p1_uid = gameData.players.player1.uid;
+                            const p2_uid = gameData.players.player2.uid;
+                            winnerUid = localPlayerUid === p1_uid ? p2_uid : p1_uid;
+                        }
+
+                        if (winnerUid) {
+                             const finalUpdate = {
+                                gameState: 'finished',
+                                winner: winnerUid,
+                                chips: chips.map(c => ({...c})),
+                                player1Hand: localPlayerId === 'player1' ? playerHand : opponentHand,
+                                player2Hand: localPlayerId === 'player1' ? opponentHand : playerHand,
+                                turnInProgress: false,
+                            };
+                            await updateDoc(gameDocRef, finalUpdate);
+                        }
+                    }
+                } catch (e) {
+                    console.error("Failed to send final game state:", e);
+                }
+            }
+            
+            // Set local state after potentially updating the server
             gameState = 'gameover';
             winnerText.textContent = winnerTextMessage;
 
-            if (isOnlineGame && winnerTextMessage.includes('You Win')) {
-                const gameDocRef = doc(db, "games", gameId);
-                const finalUpdate = {
-                    gameState: 'finished',
-                    winner: localPlayerUid,
-                    chips: chips.map(c => ({...c})),
-                    player1Hand: localPlayerId === 'player1' ? playerHand : opponentHand,
-                    player2Hand: localPlayerId === 'player1' ? opponentHand : playerHand,
-                    turnInProgress: false, 
-                };
-                await updateDoc(gameDocRef, finalUpdate);
-            }
-            
             if (gameMode.includes('poker')) {
                 const handToShow = originalOpponentHand;
                 const remainingHandToShow = opponentHand;
@@ -2021,7 +1917,6 @@
             });
 
             fullscreenButton.addEventListener('click', toggleFullScreen);
-            rewardAdButton.addEventListener('click', showRewardedAd);
 
             vsAiButton.addEventListener('click', () => { 
                 gameModeSelect.style.display = 'none'; 
@@ -2134,7 +2029,6 @@
             powerControl.addEventListener('mousedown', handlePointerDown);
             powerControl.addEventListener('touchstart', handlePointerDown, { passive: false });
             
-            // INAYOS: Itinama ang event listener para sa pektus control
             pektusControl.addEventListener('mousedown', handlePointerDown);
             pektusControl.addEventListener('touchstart', handlePointerDown, { passive: false });
             
@@ -2499,7 +2393,9 @@
 
                 if (data.gameType === 'poker') {
                     playerHand = (localPlayerId === 'player1') ? data.player1Hand : data.player2Hand;
-                    opponentHand = (localPlayerId === 'player1') ? data.player2Hand : data.originalPlayer1Hand;
+                    // BUG FIX: The opponent's hand was being reset to the original hand instead of the updated one.
+                    // This ensures both players see the correct, updated hands from the server.
+                    opponentHand = (localPlayerId === 'player1') ? data.player2Hand : data.player1Hand;
                     originalPlayerHand = (localPlayerId === 'player1') ? data.originalPlayer1Hand : data.originalPlayer2Hand;
                     originalOpponentHand = (localPlayerId === 'player1') ? data.originalPlayer2Hand : data.originalPlayer1Hand;
                 } else {
