@@ -569,7 +569,7 @@
         let table = { width: 0, height: 0 };
         let chips = [];
         let holes = [];
-        let cueStick = { angle: 0, length: 400, visible: true, power: 0 };
+        let cueStick = { angle: 0, length: 2000, visible: true, power: 0 };
         let gameState = 'menu';
         let gameMode = 'ai-classic';
         let playerTurn = true;
@@ -612,6 +612,10 @@
         let audioInitialized = false;
         let collisionSynth, pocketSynth;
         let lastCollisionSoundTime = -1;
+
+        // DITO ILALAGAY ANG CODE PARA SA BAGONG TAKO
+        const cueStickImage = new Image();
+        cueStickImage.src = 'https://i.imgur.com/FYXWKhr.png'; // Eto na yung link mo
 
         // =========================================================================
         // AUDIO HANDLING
@@ -746,7 +750,7 @@
                     chip.radius = radiusConstant * scale;
                 });
             }
-            cueStick.length = 400 * scale;
+            cueStick.length = 700 * scale;
         }
 
         function setupHoles() {
@@ -894,42 +898,31 @@
             ctx.translate(cueChip.x, cueChip.y);
             ctx.rotate(cueStick.angle);
 
-            const stickOffset = 10 * scale;
-            const stickStart = -(cueChip.radius + stickOffset);
-            const stickEnd = stickStart - cueStick.length;
+            // Ang lumang code para sa pag-drawing ng tako ay tinanggal na.
+            // Ito na ang bagong code na gumagamit ng iyong image.
+            const stickOffset = 15 * scale; // Distansya ng dulo ng tako sa bola
+            const stickDrawStart = -(cueChip.radius + stickOffset + cueStick.length);
+            const stickHeight = 250 * scale; // Pwede mong baguhin ang kapal ng tako dito
 
-            ctx.beginPath();
-            ctx.moveTo(stickEnd, 0);
-            ctx.lineTo(stickEnd + cueStick.length * 0.4, 0);
-            ctx.strokeStyle = '#2c1e14'; 
-            ctx.lineWidth = 7 * scale; 
-            ctx.stroke();
+            // Tinitiyak na nag-load na ang image bago ito iguhit
+            if (cueStickImage.complete && cueStickImage.naturalHeight !== 0) {
+                ctx.drawImage(
+                    cueStickImage,        // Ang iyong image
+                    stickDrawStart,       // Simulang X position (paatras mula sa bola)
+                    -stickHeight / 2,     // Simulang Y position (para nakagitna)
+                    cueStick.length,      // Haba ng tako
+                    stickHeight           // Kapal ng tako
+                );
+            } else {
+                // Fallback: Gumuhit ng simpleng linya kung hindi pa naglo-load ang image
+                ctx.beginPath();
+                ctx.moveTo(-(cueChip.radius + stickOffset), 0);
+                ctx.lineTo(-(cueChip.radius + stickOffset + cueStick.length), 0);
+                ctx.strokeStyle = '#a0522d'; // Fallback color
+                ctx.lineWidth = 5 * scale;
+                ctx.stroke();
+            }
 
-            const gradient = ctx.createLinearGradient(stickEnd + cueStick.length * 0.4, 0, stickStart, 0);
-            gradient.addColorStop(0, '#a0522d'); 
-            gradient.addColorStop(1, '#f5deb3'); 
-
-            ctx.beginPath();
-            ctx.moveTo(stickEnd + cueStick.length * 0.4, 0);
-            ctx.lineTo(stickStart - 15 * scale, 0); 
-            ctx.strokeStyle = gradient;
-            ctx.lineWidth = 5 * scale; 
-            ctx.stroke();
-
-            ctx.beginPath();
-            ctx.moveTo(stickStart - 15 * scale, 0);
-            ctx.lineTo(stickStart - 5 * scale, 0);
-            ctx.strokeStyle = '#f0f0f0'; 
-            ctx.lineWidth = 5.5 * scale; 
-            ctx.stroke();
-
-            ctx.beginPath();
-            ctx.moveTo(stickStart - 5 * scale, 0);
-            ctx.lineTo(stickStart, 0);
-            ctx.strokeStyle = '#4a6a8a'; 
-            ctx.lineWidth = 5.5 * scale;
-            ctx.stroke();
-            
             ctx.restore();
         }
 
