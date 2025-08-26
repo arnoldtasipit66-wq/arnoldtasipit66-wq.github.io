@@ -612,8 +612,8 @@
         let lastCueBallUpdateTime = 0;
         const CUE_BALL_UPDATE_THROTTLE = 50; 
         let lastDisplayedTurnUid = null;
-        // **FINAL FIX**: This lock prevents the client from processing server updates while its own shot is resolving.
-        let isLocallyShooting = false;
+        // **FINAL FIX**: This flag is the key. It tells the client to ignore server updates while its own shot is resolving.
+        let isAwaitingTurnResult = false;
 
         // --- Audio State ---
         let audioInitialized = false;
@@ -1373,7 +1373,7 @@
                 const gameDocRef = doc(db, "games", gameId);
                 const docSnap = await getDoc(gameDocRef);
                 if (!docSnap.exists()) {
-                    isLocallyShooting = false; 
+                    isAwaitingTurnResult = false; 
                     return;
                 }
                 const gameData = docSnap.data();
@@ -1406,16 +1406,16 @@
                         updatedData.player2ChipsType = playerChipsType;
                     }
                 }
+                
+                // **FINAL FIX**: Update local state *before* sending to server to ensure consistency.
+                isMyTurnOnline = (nextTurnUid === localPlayerUid);
+                currentTurnUid = nextTurnUid;
+                lastDisplayedTurnUid = currentTurnUid;
 
-                await updateDoc(gameDocRef, updatedData);
-
-                // **FINAL FIX**: After successfully updating the server, update the local state immediately.
-                // This prevents the client from getting stuck, as it doesn't need to wait for the
-                // onSnapshot echo (which is currently blocked by the isLocallyShooting lock).
-                if (switchTurn) {
-                    isMyTurnOnline = false; // It's now the opponent's turn.
-                    showMessage("Opponent's turn", 1500);
-                    lastDisplayedTurnUid = nextTurnUid;
+                if (isMyTurnOnline) {
+                     showMessage("Your turn", 1500);
+                } else {
+                     showMessage("Opponent's turn", 1500);
                 }
                 
                 resetPektus();
@@ -1423,16 +1423,22 @@
                 updateInfoBox();
 
                 if (gameState !== 'gameover') {
-                    gameState = 'aiming';
+                    if (canMoveCueBall && isMyTurnOnline) {
+                        gameState = 'moving';
+                    } else {
+                         gameState = 'aiming';
+                    }
                     cueStick.visible = true;
                 }
+
+                await updateDoc(gameDocRef, updatedData);
 
             } catch (error) {
                 console.error("Error updating game state:", error);
                 showMessage("Connection error. Could not update game.", 3000);
             } finally {
                 // **FINAL FIX**: Release the lock *after* all processing is done.
-                isLocallyShooting = false;
+                isAwaitingTurnResult = false;
             }
         }
 
@@ -1497,7 +1503,7 @@
             
             // **FINAL FIX**: Activate the lock before shooting.
             if (isOnlineGame) {
-                isLocallyShooting = true;
+                isAwaitingTurnResult = true;
             }
             
             chipsPocketedInTurn = [];
@@ -1948,7 +1954,7 @@
             turnInProgress = false; 
             lastDisplayedTurnUid = null;
             // **FINAL FIX**: Reset the lock when returning to menu.
-            isLocallyShooting = false;
+            isAwaitingTurnResult = false;
             
             playerTurn = true;
             
@@ -2484,9 +2490,9 @@
                 const gameData = doc.data();
                 if (!gameData) return;
                 
-                // **FINAL FIX**: The lock is checked here. If the local client is shooting,
+                // **FINAL FIX**: The lock is checked here. If the local client is waiting for its own turn to resolve,
                 // it ignores all incoming updates to prevent state corruption.
-                if (isLocallyShooting) {
+                if (isAwaitingTurnResult) {
                     return;
                 }
 
