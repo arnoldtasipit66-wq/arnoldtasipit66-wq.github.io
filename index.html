@@ -570,7 +570,7 @@
         let chips = [];
         let holes = [];
         let cueStick = { angle: 0, length: 2000, visible: true, power: 0, pullback: 0 };
-        let opponentCueStick = { angle: 0, length: 2000, visible: false, power: 0, pullback: 0 }; // NEW: For opponent's cue
+        let opponentCueStick = { angle: 0, length: 2000, visible: false, power: 0, pullback: 0 };
         let gameState = 'menu';
         let gameMode = 'ai-classic';
         let playerTurn = true;
@@ -608,8 +608,8 @@
         let isMyTurnOnline = false;
         let turnInProgress = false;
         let selectedOnlineGameType = 'poker';
-        let lastCueUpdateTime = 0; // NEW: For throttling cue updates
-        const CUE_UPDATE_THROTTLE = 50; // NEW: Send update every 50ms
+        let lastCueUpdateTime = 0;
+        const CUE_UPDATE_THROTTLE = 50; // Send update every 50ms
 
         // --- Audio State ---
         let audioInitialized = false;
@@ -690,11 +690,11 @@
         function update() {
             if (isRotatingLeft) {
                 cueStick.angle -= ROTATION_SPEED;
-                sendCueStateUpdate(); // NEW: Send update on rotation
+                sendCueStateUpdate();
             }
             if (isRotatingRight) {
                 cueStick.angle += ROTATION_SPEED;
-                sendCueStateUpdate(); // NEW: Send update on rotation
+                sendCueStateUpdate();
             }
 
             if (chipsMoving) {
@@ -713,9 +713,9 @@
 
             if (gameState === 'aiming' || gameState === 'shooting_animation') {
                 if (isMyTurn) {
-                    drawCueStick(chips[0], cueStick); // Draw my cue
+                    drawCueStick(chips[0], cueStick);
                 } else if (isOnlineGame && opponentCueStick.visible) {
-                    drawCueStick(chips[0], opponentCueStick); // Draw opponent's cue
+                    drawCueStick(chips[0], opponentCueStick);
                 }
             }
             
@@ -763,7 +763,7 @@
                 });
             }
             cueStick.length = 550 * scale;
-            opponentCueStick.length = 550 * scale; // NEW: Resize opponent cue too
+            opponentCueStick.length = 550 * scale;
         }
 
         function setupHoles() {
@@ -902,7 +902,7 @@
             });
         }
 
-        function drawCueStick(cueChip, stickToDraw) { // MODIFIED: Accepts a cue object
+        function drawCueStick(cueChip, stickToDraw) {
             if (!stickToDraw.visible || !cueChip || !cueChip.inPlay) return;
 
             ctx.save();
@@ -1192,7 +1192,6 @@
             canMoveCueBall = true;
             gameState = 'moving';
             
-            // BUG FIX: Ensure cue stick is visible at the start of a new game.
             cueStick.visible = true;
             
             showMessage("Place the cue ball for your break shot.", 3000);
@@ -2141,7 +2140,7 @@
 
             const MAX_PULLBACK = 150 * scale;
             cueStick.pullback = cueStick.power * MAX_PULLBACK;
-            sendCueStateUpdate(); // NEW: Send update on power change
+            sendCueStateUpdate();
         }
         
         function updateAimFromCanvas(e) {
@@ -2151,7 +2150,7 @@
             const dx = cueChip.x - pos.x;
             const dy = cueChip.y - pos.y;
             cueStick.angle = Math.atan2(dy, dx);
-            sendCueStateUpdate(); // NEW: Send update on aim change
+            sendCueStateUpdate();
         }
 
         function updateCueBallPosition(e) {
@@ -2198,7 +2197,6 @@
         // FIREBASE MULTIPLAYER LOGIC
         // =========================================================================
         
-        // NEW: Function to send cue state updates, throttled for performance
         async function sendCueStateUpdate() {
             if (!isOnlineGame || !isMyTurnOnline || !gameId) return;
 
@@ -2284,9 +2282,9 @@
                     player2: null
                 },
                 chips: chips.map(c => ({...c})),
-                currentTurnUid: localPlayerUid, // CONFIRMED: Creator (player1) is set as the first turn
+                currentTurnUid: localPlayerUid,
                 lastShot: null,
-                cueState: null, // NEW: Add cueState field
+                cueState: null,
                 turnInProgress: false, 
                 canMoveCueBall: true,
                 isBreakShot: true,
@@ -2348,7 +2346,6 @@
 
                     listenToGameUpdates(inputId);
 
-                    // CONFIRMED: Joining does not change the currentTurnUid, so creator still goes first.
                     await updateDoc(gameDocRef, {
                         'players.player2': { uid: localPlayerUid, ready: true, status: 'online' },
                         'gameState': 'playing'
@@ -2417,12 +2414,12 @@
 
                 const gameData = doc.data();
                 if (!gameData) return;
-
-                // NEW: Listen for cue state changes from opponent
+                
+                // CRITICAL FIX: Always listen for opponent's cue state
                 if (gameData.cueState && gameData.cueState.uid !== localPlayerUid) {
                     opponentCueStick.angle = gameData.cueState.angle;
                     opponentCueStick.pullback = gameData.cueState.pullback;
-                    opponentCueStick.visible = true;
+                    opponentCueStick.visible = true; // Ensure it's visible on update
                 }
 
                 if (gameData.lastShot && gameData.lastShot.timestamp > lastShotTimestamp) {
@@ -2497,8 +2494,9 @@
                     cueBallGuide.style.display = 'block';
                 } else {
                     gameState = 'aiming';
-                    cueStick.visible = isMyTurnOnline; // Only show local cue on my turn
-                    opponentCueStick.visible = !isMyTurnOnline; // Only show opponent cue on their turn
+                    // CRITICAL FIX: Explicitly manage visibility of both cues
+                    cueStick.visible = isMyTurnOnline;
+                    opponentCueStick.visible = !isMyTurnOnline;
                     cueBallGuide.style.display = 'none';
                 }
                 
