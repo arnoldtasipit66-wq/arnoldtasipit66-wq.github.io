@@ -699,18 +699,15 @@
             requestAnimationFrame(update);
         }
 
-        // MODIFIED: Simplified the draw logic to show the cue stick for any player
         function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             drawTable();
             drawChips();
 
-            // Draw the cue stick if anyone is aiming or a shot is being animated
             if (gameState === 'aiming' || gameState === 'shooting_animation') {
                  drawCueStick();
             }
 
-            // Draw guidelines only for the local player during their aiming phase
             const isMyTurn = isOnlineGame ? isMyTurnOnline : playerTurn;
             if (isMyTurn && gameState === 'aiming') {
                  drawGuidelines();
@@ -1184,6 +1181,10 @@
             isBreakShot = true;
             canMoveCueBall = true;
             gameState = 'moving';
+            
+            // BUG FIX: Ensure cue stick is visible at the start of a new game.
+            cueStick.visible = true;
+            
             showMessage("Place the cue ball for your break shot.", 3000);
             
             resetPektus();
@@ -1461,7 +1462,7 @@
             shotPektusOffset = { ...pektusOffset };
             
             const shotData = {
-                uid: localPlayerUid, // MODIFIED: Add UID to shot data
+                uid: localPlayerUid,
                 angle: cueStick.angle,
                 power: shotPower,
                 pektus: shotPektusOffset,
@@ -1488,11 +1489,8 @@
                     powerBar.style.height = '0%';
                     cueStick.pullback = 0;
 
-                    // MODIFIED: Optimistic update for online games
                     if (isOnlineGame) {
-                        // Apply physics locally immediately for responsiveness
                         applyShot(shotData); 
-                        // Send the shot data to the server
                         try {
                             const gameDocRef = doc(db, "games", gameId);
                             updateDoc(gameDocRef, { 
@@ -1503,11 +1501,11 @@
                             console.error("Error sending shot data:", error);
                         }
                     } else {
-                        // For offline games, just apply physics
                         applyShot(shotData);
                     }
                 }
             }
+
             requestAnimationFrame(animateShot);
         }
         
@@ -2341,7 +2339,6 @@
             resetToMenu();
         }
         
-        // NEW: Function to animate a shot received from the server
         function animateReceivedShot(shotData) {
             cueStick.angle = shotData.angle;
             cueStick.visible = true;
@@ -2371,7 +2368,6 @@
             requestAnimationFrame(animateOpponentShot);
         }
 
-        // MODIFIED: The listener now handles opponent shots differently
         function listenToGameUpdates(gameId) {
             const gameDocRef = doc(db, "games", gameId);
             let lastShotTimestamp = 0;
@@ -2387,7 +2383,6 @@
                 if (!gameData) return;
 
                 if (gameData.lastShot && gameData.lastShot.timestamp > lastShotTimestamp) {
-                    // Only process the shot if it's from the opponent
                     if (gameData.lastShot.uid !== localPlayerUid) {
                         animateReceivedShot(gameData.lastShot);
                     }
@@ -2459,9 +2454,8 @@
                     cueBallGuide.style.display = 'block';
                 } else {
                     gameState = 'aiming';
-                    if (isMyTurnOnline) {
-                        cueStick.visible = true;
-                    }
+                    // Make cue stick visible for whosever turn it is
+                    cueStick.visible = true; 
                     cueBallGuide.style.display = 'none';
                 }
                 
