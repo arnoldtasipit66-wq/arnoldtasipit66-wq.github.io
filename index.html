@@ -607,6 +607,7 @@
         let isMyTurnOnline = false;
         let turnInProgress = false;
         let selectedOnlineGameType = 'poker';
+        let lastAimSendTime = 0;
 
         // --- Audio State ---
         let audioInitialized = false;
@@ -687,9 +688,11 @@
         function update() {
             if (isRotatingLeft) {
                 cueStick.angle -= ROTATION_SPEED;
+                throttleSendAimUpdate();
             }
             if (isRotatingRight) {
                 cueStick.angle += ROTATION_SPEED;
+                throttleSendAimUpdate();
             }
 
             if (chipsMoving) {
@@ -752,7 +755,7 @@
                     chip.radius = radiusConstant * scale;
                 });
             }
-            cueStick.length = 550 * scale;
+            cueStick.length = 600 * scale;
         }
 
         function setupHoles() {
@@ -1181,8 +1184,6 @@
             isBreakShot = true;
             canMoveCueBall = true;
             gameState = 'moving';
-            
-            // BUG FIX: Ensure cue stick is visible at the start of a new game.
             cueStick.visible = true;
             
             showMessage("Place the cue ball for your break shot.", 3000);
@@ -1484,7 +1485,7 @@
                 if (progress < 1) {
                     requestAnimationFrame(animateShot);
                 } else {
-                    cueStick.visible = false;
+                    // cueStick.visible = false; // REMOVED: This was the cause of the bug
                     cueStick.power = 0;
                     powerBar.style.height = '0%';
                     cueStick.pullback = 0;
@@ -2140,6 +2141,7 @@
             const dx = cueChip.x - pos.x;
             const dy = cueChip.y - pos.y;
             cueStick.angle = Math.atan2(dy, dx);
+            throttleSendAimUpdate();
         }
 
         function updateCueBallPosition(e) {
@@ -2186,6 +2188,19 @@
         // FIREBASE MULTIPLAYER LOGIC
         // =========================================================================
         
+        function throttleSendAimUpdate() {
+            if (!isOnlineGame || !isMyTurnOnline || !gameId) return;
+
+            const now = Date.now();
+            if (now - lastAimSendTime > 75) {
+                lastAimSendTime = now;
+                const gameDocRef = doc(db, "games", gameId);
+                updateDoc(gameDocRef, {
+                    "aimingState.angle": cueStick.angle
+                }).catch(err => console.error("Error sending aim update:", err));
+            }
+        }
+
         function initializeFirebase() {
             try {
                 const firebaseConfig = {
@@ -2252,6 +2267,7 @@
                 chips: chips.map(c => ({...c})),
                 currentTurnUid: localPlayerUid,
                 lastShot: null,
+                aimingState: { angle: 0 },
                 turnInProgress: false, 
                 canMoveCueBall: true,
                 isBreakShot: true,
@@ -2360,7 +2376,6 @@
                 if (progress < 1) {
                     requestAnimationFrame(animateOpponentShot);
                 } else {
-                    cueStick.visible = false;
                     cueStick.pullback = 0;
                     applyShot(shotData);
                 }
@@ -2421,6 +2436,10 @@
             
             turnInProgress = data.turnInProgress;
 
+            if (gameState === 'aiming' && !isMyTurnOnline && data.aimingState) {
+                cueStick.angle = data.aimingState.angle;
+            }
+
             if (!turnInProgress) {
                 chipsMoving = false; 
                 
@@ -2454,7 +2473,6 @@
                     cueBallGuide.style.display = 'block';
                 } else {
                     gameState = 'aiming';
-                    // Make cue stick visible for whosever turn it is
                     cueStick.visible = true; 
                     cueBallGuide.style.display = 'none';
                 }
