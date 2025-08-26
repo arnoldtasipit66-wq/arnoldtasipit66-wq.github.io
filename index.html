@@ -507,7 +507,7 @@
         const gameWrapper = document.getElementById('game-wrapper');
         const messageBox = document.getElementById('message-box');
         const winnerModal = document.getElementById('winner-modal');
-        const winnerText = document.getElementById('winner-text'); // FIXED ID
+        const winnerText = document.getElementById('winner-text');
         const playerInfo = document.getElementById('player-info');
         const opponentInfo = document.getElementById('opponent-info');
         const powerControl = document.getElementById('power-control');
@@ -562,8 +562,6 @@
         const MIN_VELOCITY = 0.05;
         const ROTATION_SPEED = 0.03;
         
-        const DEBUG_MODE = false; 
-
         // --- Game State Variables ---
         let scale = 1;
         let table = { width: 0, height: 0 };
@@ -1098,7 +1096,6 @@
             
             chipsMoving = stillMoving;
             if (!chipsMoving) {
-                // Only the current player's client should handle the turn end logic
                 if (isOnlineGame) {
                     if (isMyTurnOnline) {
                         setTimeout(handleTurnEnd, 200);
@@ -1211,9 +1208,8 @@
         // TURN LOGIC - DUAL MODE
         // =========================================================================
         async function handleTurnEnd() {
-            // This function should only be called by the player whose turn just ended.
             if (isOnlineGame && !isMyTurnOnline) return;
-            if (turnInProgress) return; // Prevent multiple calls
+            if (turnInProgress) return;
             
             if (gameMode.includes('poker')) {
                 await handlePokerTurnEnd();
@@ -1225,6 +1221,7 @@
         async function handlePokerTurnEnd() {
             let foul = false;
             let switchTurn = true; 
+            let nextPlayerCanMoveCue = false;
             
             const currentPlayerHand = isOnlineGame ? playerHand : (playerTurn ? playerHand : opponentHand);
 
@@ -1272,19 +1269,15 @@
 
             if (foul) {
                 switchTurn = true; 
-                canMoveCueBall = true;
+                nextPlayerCanMoveCue = true;
             }
             
             if (checkWinCondition()) return;
 
             if (isOnlineGame) {
-                await updateOnlineGameState(switchTurn, canMoveCueBall);
+                await updateOnlineGameState(switchTurn, nextPlayerCanMoveCue);
             } else {
-                if (foul) {
-                    cueBallGuide.textContent = `Ball in hand! Drag the cue ball to place it.`;
-                    cueBallGuide.style.display = 'block';
-                }
-                updateLocalGameState(switchTurn, canMoveCueBall);
+                updateLocalGameState(switchTurn, nextPlayerCanMoveCue);
             }
         }
 
@@ -1360,10 +1353,6 @@
             if (isOnlineGame) {
                 await updateOnlineGameState(switchTurn, nextPlayerCanMoveCue);
             } else {
-                if (nextPlayerCanMoveCue) {
-                    cueBallGuide.textContent = `Ball in hand! Drag the cue ball to place it.`;
-                    cueBallGuide.style.display = 'block';
-                }
                 updateLocalGameState(switchTurn, nextPlayerCanMoveCue);
             }
         }
@@ -1426,6 +1415,8 @@
                 if (nextPlayerCanMoveCue) {
                     gameState = 'moving';
                     canMoveCueBall = true;
+                    cueBallGuide.textContent = `Ball in hand! Drag the cue ball to place it.`;
+                    cueBallGuide.style.display = 'block';
                     if (gameMode.includes('ai') && !playerTurn) placeCueChipForAI();
                 } else {
                     gameState = 'aiming';
@@ -1472,11 +1463,9 @@
         async function shoot() {
             if (gameState !== 'aiming' || chipsMoving) return;
             
-            // The power is derived from the pullback length
             const power = (cueStick.pullback / (150 * scale)) * 30 + 5;
-            if (power <= 5) return; // Don't shoot if no power
+            if (power <= 5) return;
 
-            // Reset local turn state
             chipsPocketedInTurn = [];
             firstChipHitInTurn = null;
             shotPektusOffset = { ...pektusOffset };
@@ -1489,8 +1478,6 @@
                 timestamp: Date.now()
             };
 
-            // For online games, we don't act immediately. We send the shot to the server.
-            // The server will then tell BOTH clients to execute the shot via onSnapshot.
             if (isOnlineGame) {
                 try {
                     const gameDocRef = doc(db, "games", gameId);
@@ -1503,7 +1490,6 @@
                     showMessage("Could not send shot. Check connection.", 2000);
                 }
             } else {
-                // For local games, we animate and apply the shot directly.
                 animateAndApplyShot(shotData);
             }
         }
@@ -1531,18 +1517,15 @@
         }
 
         function applyShot(shotData) {
-            // This function is now called by BOTH clients after receiving `lastShot` data
             const cueChip = chips[0];
             if (!cueChip || !cueChip.inPlay) return;
             
-            // Reset local state for the shot simulation
             cueStick.visible = false;
             cueStick.power = 0;
             powerBar.style.height = '0%';
             cueStick.pullback = 0;
             shotPektusOffset = shotData.pektus || { x: 0, y: 0 };
 
-            // Apply physics
             cueChip.vx = Math.cos(shotData.angle) * shotData.power * scale;
             cueChip.vy = Math.sin(shotData.angle) * shotData.power * scale;
             chipsMoving = true; 
@@ -1551,9 +1534,8 @@
 
         async function endGame(winnerTextMessage) {
             if (gameState === 'gameover') return;
-            gameState = 'gameover'; // Set state immediately to prevent race conditions
+            gameState = 'gameover'; 
 
-            // The winner (current player) sends the final game state
             if (isOnlineGame && isMyTurnOnline) {
                 try {
                     const gameDocRef = doc(db, "games", gameId);
@@ -2130,7 +2112,7 @@
         function handlePointerUp() {
             if (isPoweringUp) {
                 isPoweringUp = false;
-                shoot(); // Shoot function no longer takes power as argument
+                shoot();
             }
             if (isAimingOnCanvas) {
                 isAimingOnCanvas = false;
@@ -2406,14 +2388,11 @@
                 const gameData = doc.data();
                 if (!gameData) return;
 
-                // The most important part: The server tells us a shot was made.
-                // Both clients will receive this and execute the same shot animation.
                 if (gameData.lastShot && gameData.lastShot.timestamp > lastShotTimestamp) {
                     animateAndApplyShot(gameData.lastShot);
                     lastShotTimestamp = gameData.lastShot.timestamp;
                 }
 
-                // Sync the rest of the game state
                 syncGameState(gameData);
             });
         }
@@ -2447,7 +2426,6 @@
             currentTurnUid = data.currentTurnUid;
             isMyTurnOnline = (currentTurnUid === localPlayerUid);
 
-            // Real-time cue stick sync for the opponent
             if (!isMyTurnOnline) {
                 const opponentId = localPlayerId === 'player1' ? 'player2' : 'player1';
                 const opponentData = data.players ? data.players[opponentId] : null;
@@ -2459,7 +2437,6 @@
 
             turnInProgress = data.turnInProgress;
 
-            // This block syncs the state AFTER a shot is complete and balls stop moving
             if (!turnInProgress && !chipsMoving) {
                 chips = data.chips.map(remoteChip => ({
                     ...remoteChip,
