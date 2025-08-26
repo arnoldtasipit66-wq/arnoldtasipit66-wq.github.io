@@ -1099,15 +1099,25 @@
             });
             
             chipsMoving = stillMoving;
-            if (!chipsMoving) {
+            
+            // *** START OF FIX ***
+            // Check if the game was in a 'shooting' state and the balls just stopped.
+            if (gameState === 'shooting' && !chipsMoving) {
+                // Change the state immediately to prevent this block from running again.
+                gameState = 'evaluating_turn'; 
+                
+                // Call handleTurnEnd only ONCE.
                 if (isOnlineGame) {
                     if (isMyTurnOnline) {
-                        setTimeout(handleTurnEnd, 200);
+                        handleTurnEnd();
                     }
+                    // The other player doesn't call this, which is correct.
                 } else {
-                    setTimeout(handleTurnEnd, 200);
+                    // For local games
+                    handleTurnEnd();
                 }
             }
+            // *** END OF FIX ***
         }
 
         function handleChipCollision(chip1, chip2) {
