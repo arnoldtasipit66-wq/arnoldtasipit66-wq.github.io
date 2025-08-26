@@ -612,7 +612,7 @@
         let lastCueBallUpdateTime = 0;
         const CUE_BALL_UPDATE_THROTTLE = 50; 
         let lastDisplayedTurnUid = null;
-        // **BUG FIX v2**: Lock para maiwasan ang state corruption habang nagpo-proseso ng sariling tira.
+        // **FINAL FIX**: This lock prevents the client from processing server updates while its own shot is resolving.
         let isLocallyShooting = false;
 
         // --- Audio State ---
@@ -1372,7 +1372,10 @@
             try {
                 const gameDocRef = doc(db, "games", gameId);
                 const docSnap = await getDoc(gameDocRef);
-                if (!docSnap.exists()) return;
+                if (!docSnap.exists()) {
+                    isLocallyShooting = false; 
+                    return;
+                }
                 const gameData = docSnap.data();
                 
                 let nextTurnUid = gameData.currentTurnUid;
@@ -1405,14 +1408,31 @@
                 }
 
                 await updateDoc(gameDocRef, updatedData);
+
+                // **FINAL FIX**: After successfully updating the server, update the local state immediately.
+                // This prevents the client from getting stuck, as it doesn't need to wait for the
+                // onSnapshot echo (which is currently blocked by the isLocallyShooting lock).
+                if (switchTurn) {
+                    isMyTurnOnline = false; // It's now the opponent's turn.
+                    showMessage("Opponent's turn", 1500);
+                    lastDisplayedTurnUid = nextTurnUid;
+                }
+                
+                resetPektus();
+                updateCardDisplay(); 
+                updateInfoBox();
+
+                if (gameState !== 'gameover') {
+                    gameState = 'aiming';
+                    cueStick.visible = true;
+                }
+
             } catch (error) {
                 console.error("Error updating game state:", error);
                 showMessage("Connection error. Could not update game.", 3000);
             } finally {
-                // **BUG FIX v2**: I-release ang lock pagkatapos subukang mag-update.
-                if (isOnlineGame) {
-                    isLocallyShooting = false;
-                }
+                // **FINAL FIX**: Release the lock *after* all processing is done.
+                isLocallyShooting = false;
             }
         }
 
@@ -1475,11 +1495,11 @@
         async function shoot(shotPower) {
             if (gameState !== 'aiming' || chipsMoving) return;
             
-            // **BUG FIX v2**: I-set ang lock bago mag-shoot sa online game.
+            // **FINAL FIX**: Activate the lock before shooting.
             if (isOnlineGame) {
                 isLocallyShooting = true;
             }
-
+            
             chipsPocketedInTurn = [];
             firstChipHitInTurn = null;
             shotPektusOffset = { ...pektusOffset };
@@ -1927,7 +1947,7 @@
             isMyTurnOnline = false;
             turnInProgress = false; 
             lastDisplayedTurnUid = null;
-            // **BUG FIX v2**: I-reset ang lock.
+            // **FINAL FIX**: Reset the lock when returning to menu.
             isLocallyShooting = false;
             
             playerTurn = true;
@@ -2463,6 +2483,12 @@
 
                 const gameData = doc.data();
                 if (!gameData) return;
+                
+                // **FINAL FIX**: The lock is checked here. If the local client is shooting,
+                // it ignores all incoming updates to prevent state corruption.
+                if (isLocallyShooting) {
+                    return;
+                }
 
                 if (gameData.cueState && gameData.cueState.uid !== localPlayerUid) {
                     if (!isMyTurnOnline && gameState === 'aiming') {
@@ -2482,11 +2508,6 @@
         }
 
         function syncGameState(data) {
-            // **BUG FIX v2**: Kung ang local player ay kasalukuyang tumitira, huwag pansinin ang mga update.
-            if (isLocallyShooting) {
-                return;
-            }
-
             if (localPlayerId && data.players) {
                 const opponentId = localPlayerId === 'player1' ? 'player2' : 'player1';
                 const opponent = data.players[opponentId];
