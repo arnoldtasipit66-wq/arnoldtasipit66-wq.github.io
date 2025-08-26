@@ -609,9 +609,10 @@
         let selectedOnlineGameType = 'poker';
         let lastAimUpdateTime = 0;
         const AIM_UPDATE_THROTTLE = 50; 
-        // **BUG FIX**: Throttling for cue ball placement
         let lastCueBallUpdateTime = 0;
         const CUE_BALL_UPDATE_THROTTLE = 50; 
+        // **BUG FIX**: Variable to track the last turn message
+        let lastDisplayedTurnUid = null;
 
         // --- Audio State ---
         let audioInitialized = false;
@@ -1191,7 +1192,6 @@
             canMoveCueBall = true;
             gameState = 'moving';
             
-            // BUG FIX: Ensure cue stick is visible at the start of a new game.
             cueStick.visible = true;
             
             showMessage("Place the cue ball for your break shot.", 3000);
@@ -1912,6 +1912,8 @@
             currentTurnUid = null;
             isMyTurnOnline = false;
             turnInProgress = false; 
+            // **BUG FIX**: Reset the turn message tracker
+            lastDisplayedTurnUid = null;
             
             playerTurn = true;
             
@@ -2185,7 +2187,6 @@
                 cueChip.x = Math.max(cueChip.radius, Math.min(table.width - cueChip.radius, pos.x));
                 cueChip.y = Math.max(cueChip.radius, Math.min(table.height - cueChip.radius, pos.y));
             }
-            // **BUG FIX**: I-sync ang paggalaw ng cue ball habang nililipat
             updateOnlineCueBallPosition();
         }
 
@@ -2419,18 +2420,17 @@
             }
         }
 
-        // **BUG FIX**: Function to send cue ball position update
         function updateOnlineCueBallPosition() {
             if (isOnlineGame && isMyTurnOnline && gameId && isDraggingCueBall) {
                 const now = Date.now();
                 if (now - lastCueBallUpdateTime < CUE_BALL_UPDATE_THROTTLE) {
-                    return; // Huwag mag-update kung masyadong mabilis
+                    return; 
                 }
                 lastCueBallUpdateTime = now;
 
                 const gameDocRef = doc(db, "games", gameId);
                 updateDoc(gameDocRef, {
-                    chips: chips.map(c => ({...c})) // Ipadala ang buong array na may bagong pwesto ng cue ball
+                    chips: chips.map(c => ({...c})) 
                 }).catch(err => console.error("Could not update cue ball position:", err));
             }
         }
@@ -2494,13 +2494,11 @@
             
             turnInProgress = data.turnInProgress;
             
-            // **BUG FIX**: I-sync ang chips kahit anong state para makita ang paggalaw ng cue ball
             const oldCueBallPos = chips[0] ? {x: chips[0].x, y: chips[0].y} : null;
             chips = data.chips.map(remoteChip => ({
                 ...remoteChip,
                 radius: (remoteChip.id === 0 ? CUE_BALL_RADIUS : BALL_RADIUS) * scale
             }));
-            // Iwasan na ma-overwrite ang local na paggalaw kung ikaw ang nagagalaw
             if (isDraggingCueBall && oldCueBallPos) {
                 chips[0].x = oldCueBallPos.x;
                 chips[0].y = oldCueBallPos.y;
@@ -2539,11 +2537,11 @@
                     cueBallGuide.style.display = 'none';
                 }
                 
-                if (gameState !== 'gameover' && data.gameState === 'playing') {
+                // **BUG FIX**: Show turn message only once when the turn changes.
+                if (gameState !== 'gameover' && data.gameState === 'playing' && currentTurnUid !== lastDisplayedTurnUid) {
                     const message = isMyTurnOnline ? "Your turn" : "Opponent's turn";
-                    if (messageBox.textContent !== message || messageBox.style.display === 'none') {
-                         showMessage(message, 1500);
-                    }
+                    showMessage(message, 1500);
+                    lastDisplayedTurnUid = currentTurnUid; // Update the last displayed turn
                 }
             }
             
