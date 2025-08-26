@@ -168,13 +168,13 @@
             border: 1px solid rgba(255, 255, 255, 0.3);
             border-radius: 10px;
             flex-direction: column;
+            justify-content: flex-end;
         }
         #power-bar {
             width: 100%;
             background: linear-gradient(to top, #00ff00, #ffff00, #ff0000);
             border-radius: 8px;
             height: 0%;
-            align-self: flex-start;
         }
 
         #pektus-control {
@@ -569,7 +569,7 @@
         let table = { width: 0, height: 0 };
         let chips = [];
         let holes = [];
-        let cueStick = { angle: 0, length: 2000, visible: true, power: 0 };
+        let cueStick = { angle: 0, length: 2000, visible: true, power: 0, pullback: 0 };
         let gameState = 'menu';
         let gameMode = 'ai-classic';
         let playerTurn = true;
@@ -613,9 +613,8 @@
         let collisionSynth, pocketSynth;
         let lastCollisionSoundTime = -1;
 
-        // DITO ILALAGAY ANG CODE PARA SA BAGONG TAKO
         const cueStickImage = new Image();
-        cueStickImage.src = 'https://i.imgur.com/FYXWKhr.png'; // Eto na yung link mo
+        cueStickImage.src = 'https://i.imgur.com/FYXWKhr.png';
 
         // =========================================================================
         // AUDIO HANDLING
@@ -700,15 +699,21 @@
             requestAnimationFrame(update);
         }
 
+        // MODIFIED: Simplified the draw logic to show the cue stick for any player
         function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             drawTable();
             drawChips();
-            if (isOnlineGame ? isMyTurnOnline : playerTurn) {
-                if (gameState !== 'shooting') {
-                    drawGuidelines();
-                    drawCueStick();
-                }
+
+            // Draw the cue stick if anyone is aiming or a shot is being animated
+            if (gameState === 'aiming' || gameState === 'shooting_animation') {
+                 drawCueStick();
+            }
+
+            // Draw guidelines only for the local player during their aiming phase
+            const isMyTurn = isOnlineGame ? isMyTurnOnline : playerTurn;
+            if (isMyTurn && gameState === 'aiming') {
+                 drawGuidelines();
             }
         }
 
@@ -750,7 +755,7 @@
                     chip.radius = radiusConstant * scale;
                 });
             }
-            cueStick.length = 700 * scale;
+            cueStick.length = 550 * scale;
         }
 
         function setupHoles() {
@@ -890,35 +895,32 @@
         }
 
         function drawCueStick() {
-            if (!cueStick.visible || chipsMoving || gameState !== 'aiming') return;
+            if (!cueStick.visible || !chips[0] || !chips[0].inPlay) return;
             const cueChip = chips[0];
-            if (!cueChip || !cueChip.inPlay) return;
 
             ctx.save();
             ctx.translate(cueChip.x, cueChip.y);
             ctx.rotate(cueStick.angle);
 
-            // Ang lumang code para sa pag-drawing ng tako ay tinanggal na.
-            // Ito na ang bagong code na gumagamit ng iyong image.
-            const stickOffset = 15 * scale; // Distansya ng dulo ng tako sa bola
-            const stickDrawStart = -(cueChip.radius + stickOffset + cueStick.length);
-            const stickHeight = 250 * scale; // Pwede mong baguhin ang kapal ng tako dito
+            const stickOffset = 15 * scale;
+            const stickHeight = 150 * scale;
+            const stickDrawStart = -(cueChip.radius + stickOffset + cueStick.length) - cueStick.pullback;
 
-            // Tinitiyak na nag-load na ang image bago ito iguhit
             if (cueStickImage.complete && cueStickImage.naturalHeight !== 0) {
                 ctx.drawImage(
-                    cueStickImage,        // Ang iyong image
-                    stickDrawStart,       // Simulang X position (paatras mula sa bola)
-                    -stickHeight / 2,     // Simulang Y position (para nakagitna)
-                    cueStick.length,      // Haba ng tako
-                    stickHeight           // Kapal ng tako
+                    cueStickImage,
+                    stickDrawStart,
+                    -stickHeight / 2,
+                    cueStick.length,
+                    stickHeight
                 );
             } else {
-                // Fallback: Gumuhit ng simpleng linya kung hindi pa naglo-load ang image
                 ctx.beginPath();
-                ctx.moveTo(-(cueChip.radius + stickOffset), 0);
-                ctx.lineTo(-(cueChip.radius + stickOffset + cueStick.length), 0);
-                ctx.strokeStyle = '#a0522d'; // Fallback color
+                const tipX = stickDrawStart + cueStick.length;
+                const buttX = stickDrawStart;
+                ctx.moveTo(tipX, 0);
+                ctx.lineTo(buttX, 0);
+                ctx.strokeStyle = '#a0522d';
                 ctx.lineWidth = 5 * scale;
                 ctx.stroke();
             }
@@ -928,7 +930,6 @@
 
         function drawGuidelines() {
             if (gameState !== 'aiming' || chipsMoving) return;
-            if (gameMode.includes('ai') && !playerTurn) return;
             
             const cueChip = chips[0];
             if (!cueChip || !cueChip.inPlay) return;
@@ -1238,8 +1239,6 @@
 
             if (pocketedObjectChips.length > 0) {
                 const pocketedIds = pocketedObjectChips.map(c => c.id);
-                // The client that took the shot calculates the new state for BOTH hands
-                // and sends this new truth to the server. The other client will just sync to this.
                 playerHand = playerHand.filter(card => !pocketedIds.includes(card.value));
                 opponentHand = opponentHand.filter(card => !pocketedIds.includes(card.value));
             }
@@ -1303,7 +1302,6 @@
                 if (!colorsAssigned && pocketedObjectChips.length > 0) {
                     const firstPocketed = pocketedObjectChips[0];
                     if (isOnlineGame) {
-                        // The active player determines the colors for both
                         if (localPlayerId === 'player1') {
                             playerChipsType = firstPocketed.type;
                             opponentChipsType = firstPocketed.type === 'red' ? 'blue' : 'red';
@@ -1416,6 +1414,7 @@
                     if (gameMode.includes('ai') && !playerTurn) placeCueChipForAI();
                 } else {
                     gameState = 'aiming';
+                    cueStick.visible = true;
                     if (gameMode.includes('ai') && !playerTurn) setTimeout(aiTurn, 1000);
                 }
             }
@@ -1456,35 +1455,60 @@
 
         async function shoot(shotPower) {
             if (gameState !== 'aiming' || chipsMoving) return;
-            chipsPocketedInTurn = []; 
+            
+            chipsPocketedInTurn = [];
             firstChipHitInTurn = null;
             shotPektusOffset = { ...pektusOffset };
             
             const shotData = {
+                uid: localPlayerUid, // MODIFIED: Add UID to shot data
                 angle: cueStick.angle,
                 power: shotPower,
                 pektus: shotPektusOffset,
                 timestamp: Date.now()
             };
 
-            if (isOnlineGame) {
-                try {
-                    const gameDocRef = doc(db, "games", gameId);
-                    await updateDoc(gameDocRef, { 
-                        chips: chips.map(c => ({...c})),
-                        lastShot: shotData,
-                        turnInProgress: true 
-                    });
-                } catch (error) {
-                    console.error("Error sending shot data:", error);
-                    showMessage("Connection error. Could not take shot.", 3000);
-                }
-            } else {
-                 applyShot(shotData);
-            }
+            gameState = 'shooting_animation';
             
-            cueStick.power = 0; 
-            powerBar.style.height = '0%';
+            let startTime = null;
+            const animationDuration = 100;
+            const startPullback = cueStick.pullback;
+            const endPullback = -30 * scale;
+
+            function animateShot(timestamp) {
+                if (!startTime) startTime = timestamp;
+                const progress = Math.min((timestamp - startTime) / animationDuration, 1);
+                cueStick.pullback = startPullback + (endPullback - startPullback) * progress;
+
+                if (progress < 1) {
+                    requestAnimationFrame(animateShot);
+                } else {
+                    cueStick.visible = false;
+                    cueStick.power = 0;
+                    powerBar.style.height = '0%';
+                    cueStick.pullback = 0;
+
+                    // MODIFIED: Optimistic update for online games
+                    if (isOnlineGame) {
+                        // Apply physics locally immediately for responsiveness
+                        applyShot(shotData); 
+                        // Send the shot data to the server
+                        try {
+                            const gameDocRef = doc(db, "games", gameId);
+                            updateDoc(gameDocRef, { 
+                                lastShot: shotData,
+                                turnInProgress: true 
+                            });
+                        } catch (error) {
+                            console.error("Error sending shot data:", error);
+                        }
+                    } else {
+                        // For offline games, just apply physics
+                        applyShot(shotData);
+                    }
+                }
+            }
+            requestAnimationFrame(animateShot);
         }
         
         function applyShot(shotData) {
@@ -1502,15 +1526,12 @@
         async function endGame(winnerTextMessage) {
             if (gameState === 'gameover') return;
 
-            // BUG FIX: The client whose turn just ended is responsible for the final update.
-            // 'turnInProgress' is true on this client from the moment they shoot until the server confirms the turn is over.
             if (isOnlineGame && turnInProgress) {
                 try {
                     const gameDocRef = doc(db, "games", gameId);
                     const docSnap = await getDoc(gameDocRef);
                     if (docSnap.exists() && docSnap.data().gameState !== 'finished') {
                         let winnerUid = null;
-                        // Determine the winner's UID based on the win message
                         if (winnerTextMessage.includes('You Win')) {
                             winnerUid = localPlayerUid;
                         } else if (winnerTextMessage.includes('Opponent Wins')) {
@@ -1537,7 +1558,6 @@
                 }
             }
             
-            // Set local state after potentially updating the server
             gameState = 'gameover';
             winnerText.textContent = winnerTextMessage;
 
@@ -1587,7 +1607,7 @@
         }
 
         // =========================================================================
-        // AI LOGIC (IMPROVED)
+        // AI LOGIC
         // =========================================================================
 
         function aiTurn() {
@@ -1608,7 +1628,6 @@
                 targetChips = chips.filter(c => c.inPlay && c.type === targetType);
                 
                 if (targetChips.length === 0 && colorsAssigned) {
-                    console.log("AI has no more balls to hit. Win condition should have been met.");
                     return;
                 } else if (targetChips.length === 0) {
                     targetChips = chips.filter(c => c.inPlay && c.id !== 0);
@@ -2111,6 +2130,9 @@
             let p = pos.y / powerControl.clientHeight;
             cueStick.power = Math.max(0, Math.min(1, p));
             powerBar.style.height = `${p * 100}%`;
+
+            const MAX_PULLBACK = 150 * scale;
+            cueStick.pullback = cueStick.power * MAX_PULLBACK;
         }
         
         function updateAimFromCanvas(e) {
@@ -2318,7 +2340,38 @@
             }
             resetToMenu();
         }
+        
+        // NEW: Function to animate a shot received from the server
+        function animateReceivedShot(shotData) {
+            cueStick.angle = shotData.angle;
+            cueStick.visible = true;
+            gameState = 'shooting_animation';
+            
+            let startTime = null;
+            const animationDuration = 100;
+            
+            const MAX_PULLBACK = 150 * scale;
+            const shotPowerNormalized = (shotData.power - 5) / 30;
+            const startPullback = shotPowerNormalized * MAX_PULLBACK;
+            const endPullback = -30 * scale; 
 
+            function animateOpponentShot(timestamp) {
+                if (!startTime) startTime = timestamp;
+                const progress = Math.min((timestamp - startTime) / animationDuration, 1);
+                cueStick.pullback = startPullback + (endPullback - startPullback) * progress;
+
+                if (progress < 1) {
+                    requestAnimationFrame(animateOpponentShot);
+                } else {
+                    cueStick.visible = false;
+                    cueStick.pullback = 0;
+                    applyShot(shotData);
+                }
+            }
+            requestAnimationFrame(animateOpponentShot);
+        }
+
+        // MODIFIED: The listener now handles opponent shots differently
         function listenToGameUpdates(gameId) {
             const gameDocRef = doc(db, "games", gameId);
             let lastShotTimestamp = 0;
@@ -2334,17 +2387,14 @@
                 if (!gameData) return;
 
                 if (gameData.lastShot && gameData.lastShot.timestamp > lastShotTimestamp) {
-                    chips = gameData.chips.map(remoteChip => ({
-                        ...remoteChip,
-                        radius: (remoteChip.id === 0 ? CUE_BALL_RADIUS : BALL_RADIUS) * scale
-                    }));
-                    
-                    applyShot(gameData.lastShot);
+                    // Only process the shot if it's from the opponent
+                    if (gameData.lastShot.uid !== localPlayerUid) {
+                        animateReceivedShot(gameData.lastShot);
+                    }
                     lastShotTimestamp = gameData.lastShot.timestamp;
                 }
 
                 syncGameState(gameData);
-
             });
         }
 
@@ -2386,8 +2436,6 @@
 
                 if (data.gameType === 'poker') {
                     playerHand = (localPlayerId === 'player1') ? data.player1Hand : data.player2Hand;
-                    // BUG FIX: The opponent's hand was being reset to the original hand instead of the updated one.
-                    // This ensures both players see the correct, updated hands from the server.
                     opponentHand = (localPlayerId === 'player1') ? data.player2Hand : data.player1Hand;
                     originalPlayerHand = (localPlayerId === 'player1') ? data.originalPlayer1Hand : data.originalPlayer2Hand;
                     originalOpponentHand = (localPlayerId === 'player1') ? data.originalPlayer2Hand : data.originalPlayer1Hand;
@@ -2411,6 +2459,9 @@
                     cueBallGuide.style.display = 'block';
                 } else {
                     gameState = 'aiming';
+                    if (isMyTurnOnline) {
+                        cueStick.visible = true;
+                    }
                     cueBallGuide.style.display = 'none';
                 }
                 
