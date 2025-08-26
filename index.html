@@ -611,7 +611,7 @@
         const AIM_UPDATE_THROTTLE = 50; 
         let lastCueBallUpdateTime = 0;
         const CUE_BALL_UPDATE_THROTTLE = 50; 
-        // **BUG FIX**: Variable to track the last turn message
+        // **BUG FIX**: Variable para masubaybayan ang huling turn message
         let lastDisplayedTurnUid = null;
 
         // --- Audio State ---
@@ -1101,19 +1101,19 @@
             chipsMoving = stillMoving;
             
             // *** START OF FIX ***
-            // Check if the game was in a 'shooting' state and the balls just stopped.
+            // I-check kung ang laro ay nasa 'shooting' state at kung huminto na ang mga bola.
             if (gameState === 'shooting' && !chipsMoving) {
-                // Change the state immediately to prevent this block from running again.
+                // Palitan agad ang state para hindi na muling pumasok dito.
                 gameState = 'evaluating_turn'; 
                 
-                // Call handleTurnEnd only ONCE.
+                // Tawagin ang handleTurnEnd() nang ISANG BESES lang.
                 if (isOnlineGame) {
                     if (isMyTurnOnline) {
                         handleTurnEnd();
                     }
-                    // The other player doesn't call this, which is correct.
+                    // Hindi ito tatawagin ng kalaban, na tama lang.
                 } else {
-                    // For local games
+                    // Para sa local games (vs AI)
                     handleTurnEnd();
                 }
             }
@@ -1922,7 +1922,7 @@
             currentTurnUid = null;
             isMyTurnOnline = false;
             turnInProgress = false; 
-            // **BUG FIX**: Reset the turn message tracker
+            // **BUG FIX**: I-reset ang turn message tracker
             lastDisplayedTurnUid = null;
             
             playerTurn = true;
@@ -2547,11 +2547,11 @@
                     cueBallGuide.style.display = 'none';
                 }
                 
-                // **BUG FIX**: Show turn message only once when the turn changes.
+                // **BUG FIX**: Ipakita lang ang turn message kapag nagbago ang turn.
                 if (gameState !== 'gameover' && data.gameState === 'playing' && currentTurnUid !== lastDisplayedTurnUid) {
                     const message = isMyTurnOnline ? "Your turn" : "Opponent's turn";
                     showMessage(message, 1500);
-                    lastDisplayedTurnUid = currentTurnUid; // Update the last displayed turn
+                    lastDisplayedTurnUid = currentTurnUid; // I-update ang huling ipinakitang turn
                 }
             }
             
