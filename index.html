@@ -507,7 +507,7 @@
         const gameWrapper = document.getElementById('game-wrapper');
         const messageBox = document.getElementById('message-box');
         const winnerModal = document.getElementById('winner-modal');
-        const winnerText = document.getElementById('winner-text');
+        const winnerText = document.getElementById('winnerText');
         const playerInfo = document.getElementById('player-info');
         const opponentInfo = document.getElementById('opponent-info');
         const powerControl = document.getElementById('power-control');
@@ -560,7 +560,7 @@
         const HOLE_RADIUS = 40;
         const FRICTION = 0.99; 
         const MIN_VELOCITY = 0.05;
-        const ROTATION_SPEED = 0.001;
+        const ROTATION_SPEED = 0.03;
         
         const DEBUG_MODE = false; 
 
@@ -570,7 +570,6 @@
         let chips = [];
         let holes = [];
         let cueStick = { angle: 0, length: 2000, visible: true, power: 0, pullback: 0 };
-        let opponentCueStick = { angle: 0, length: 2000, visible: false, power: 0, pullback: 0 };
         let gameState = 'menu';
         let gameMode = 'ai-classic';
         let playerTurn = true;
@@ -609,7 +608,7 @@
         let turnInProgress = false;
         let selectedOnlineGameType = 'poker';
         let lastCueUpdateTime = 0;
-        const CUE_UPDATE_THROTTLE = 50; // Send update every 50ms
+        const CUE_UPDATE_THROTTLE = 50; 
 
         // --- Audio State ---
         let audioInitialized = false;
@@ -688,12 +687,16 @@
         }
 
         function update() {
+            let angleChanged = false;
             if (isRotatingLeft) {
                 cueStick.angle -= ROTATION_SPEED;
-                sendCueStateUpdate();
+                angleChanged = true;
             }
             if (isRotatingRight) {
                 cueStick.angle += ROTATION_SPEED;
+                angleChanged = true;
+            }
+            if (angleChanged) {
                 sendCueStateUpdate();
             }
 
@@ -709,16 +712,11 @@
             drawTable();
             drawChips();
 
-            const isMyTurn = isOnlineGame ? isMyTurnOnline : playerTurn;
-
             if (gameState === 'aiming' || gameState === 'shooting_animation') {
-                if (isMyTurn) {
-                    drawCueStick(chips[0], cueStick);
-                } else if (isOnlineGame && opponentCueStick.visible) {
-                    drawCueStick(chips[0], opponentCueStick);
-                }
+                 drawCueStick();
             }
-            
+
+            const isMyTurn = isOnlineGame ? isMyTurnOnline : playerTurn;
             if (isMyTurn && gameState === 'aiming') {
                  drawGuidelines();
             }
@@ -763,7 +761,6 @@
                 });
             }
             cueStick.length = 550 * scale;
-            opponentCueStick.length = 550 * scale;
         }
 
         function setupHoles() {
@@ -902,28 +899,29 @@
             });
         }
 
-        function drawCueStick(cueChip, stickToDraw) {
-            if (!stickToDraw.visible || !cueChip || !cueChip.inPlay) return;
+        function drawCueStick() {
+            if (!cueStick.visible || !chips[0] || !chips[0].inPlay) return;
+            const cueChip = chips[0];
 
             ctx.save();
             ctx.translate(cueChip.x, cueChip.y);
-            ctx.rotate(stickToDraw.angle);
+            ctx.rotate(cueStick.angle);
 
             const stickOffset = 15 * scale;
             const stickHeight = 150 * scale;
-            const stickDrawStart = -(cueChip.radius + stickOffset + stickToDraw.length) - stickToDraw.pullback;
+            const stickDrawStart = -(cueChip.radius + stickOffset + cueStick.length) - cueStick.pullback;
 
             if (cueStickImage.complete && cueStickImage.naturalHeight !== 0) {
                 ctx.drawImage(
                     cueStickImage,
                     stickDrawStart,
                     -stickHeight / 2,
-                    stickToDraw.length,
+                    cueStick.length,
                     stickHeight
                 );
             } else {
                 ctx.beginPath();
-                const tipX = stickDrawStart + stickToDraw.length;
+                const tipX = stickDrawStart + cueStick.length;
                 const buttX = stickDrawStart;
                 ctx.moveTo(tipX, 0);
                 ctx.lineTo(buttX, 0);
@@ -2140,7 +2138,7 @@
 
             const MAX_PULLBACK = 150 * scale;
             cueStick.pullback = cueStick.power * MAX_PULLBACK;
-            sendCueStateUpdate();
+            sendCueStateUpdate(); // Send update on power change
         }
         
         function updateAimFromCanvas(e) {
@@ -2150,7 +2148,7 @@
             const dx = cueChip.x - pos.x;
             const dy = cueChip.y - pos.y;
             cueStick.angle = Math.atan2(dy, dx);
-            sendCueStateUpdate();
+            sendCueStateUpdate(); 
         }
 
         function updateCueBallPosition(e) {
@@ -2206,15 +2204,15 @@
 
             try {
                 const gameDocRef = doc(db, "games", gameId);
+                const updatePath = `players.${localPlayerId}.cueState`;
                 await updateDoc(gameDocRef, {
-                    cueState: {
-                        uid: localPlayerUid,
+                    [updatePath]: {
                         angle: cueStick.angle,
-                        pullback: cueStick.pullback
+                        pullback: cueStick.pullback // Also send pullback
                     }
                 });
             } catch (error) {
-                console.error("Error sending cue state:", error);
+                console.warn("Could not send cue state update:", error);
             }
         }
 
@@ -2278,13 +2276,12 @@
                 gameType: selectedOnlineGameType,
                 gameState: 'waiting',
                 players: {
-                    player1: { uid: localPlayerUid, ready: true, status: 'online' },
+                    player1: { uid: localPlayerUid, ready: true, status: 'online', cueState: { angle: 0, pullback: 0 } },
                     player2: null
                 },
                 chips: chips.map(c => ({...c})),
                 currentTurnUid: localPlayerUid,
                 lastShot: null,
-                cueState: null,
                 turnInProgress: false, 
                 canMoveCueBall: true,
                 isBreakShot: true,
@@ -2347,7 +2344,7 @@
                     listenToGameUpdates(inputId);
 
                     await updateDoc(gameDocRef, {
-                        'players.player2': { uid: localPlayerUid, ready: true, status: 'online' },
+                        'players.player2': { uid: localPlayerUid, ready: true, status: 'online', cueState: { angle: 0, pullback: 0 } },
                         'gameState': 'playing'
                     });
 
@@ -2373,8 +2370,8 @@
         }
         
         function animateReceivedShot(shotData) {
-            opponentCueStick.angle = shotData.angle;
-            opponentCueStick.visible = true;
+            cueStick.angle = shotData.angle;
+            cueStick.visible = true;
             gameState = 'shooting_animation';
             
             let startTime = null;
@@ -2388,13 +2385,13 @@
             function animateOpponentShot(timestamp) {
                 if (!startTime) startTime = timestamp;
                 const progress = Math.min((timestamp - startTime) / animationDuration, 1);
-                opponentCueStick.pullback = startPullback + (endPullback - startPullback) * progress;
+                cueStick.pullback = startPullback + (endPullback - startPullback) * progress;
 
                 if (progress < 1) {
                     requestAnimationFrame(animateOpponentShot);
                 } else {
-                    opponentCueStick.visible = false;
-                    opponentCueStick.pullback = 0;
+                    cueStick.visible = false;
+                    cueStick.pullback = 0;
                     applyShot(shotData);
                 }
             }
@@ -2414,17 +2411,10 @@
 
                 const gameData = doc.data();
                 if (!gameData) return;
-                
-                // CRITICAL FIX: Always listen for opponent's cue state
-                if (gameData.cueState && gameData.cueState.uid !== localPlayerUid) {
-                    opponentCueStick.angle = gameData.cueState.angle;
-                    opponentCueStick.pullback = gameData.cueState.pullback;
-                    opponentCueStick.visible = true; // Ensure it's visible on update
-                }
 
                 if (gameData.lastShot && gameData.lastShot.timestamp > lastShotTimestamp) {
                     if (gameData.lastShot.uid !== localPlayerUid) {
-                        animateReceivedShot(gameData.lastShot);
+                        animateReceivedShot(gameData.lastShot); // Animate the shot
                     }
                     lastShotTimestamp = gameData.lastShot.timestamp;
                 }
@@ -2459,6 +2449,18 @@
                 showMessage("Opponent connected! Game starting...");
             }
             
+            currentTurnUid = data.currentTurnUid;
+            isMyTurnOnline = (currentTurnUid === localPlayerUid);
+
+            if (!isMyTurnOnline) {
+                const opponentId = localPlayerId === 'player1' ? 'player2' : 'player1';
+                const opponentData = data.players ? data.players[opponentId] : null;
+                if (opponentData && opponentData.cueState) {
+                    cueStick.angle = opponentData.cueState.angle;
+                    cueStick.pullback = opponentData.cueState.pullback;
+                }
+            }
+
             turnInProgress = data.turnInProgress;
 
             if (!turnInProgress) {
@@ -2482,8 +2484,6 @@
                 updateCardDisplay();
                 updateInfoBox();
 
-                currentTurnUid = data.currentTurnUid;
-                isMyTurnOnline = (currentTurnUid === localPlayerUid);
                 canMoveCueBall = data.canMoveCueBall;
                 isBreakShot = data.isBreakShot;
                 
@@ -2494,9 +2494,7 @@
                     cueBallGuide.style.display = 'block';
                 } else {
                     gameState = 'aiming';
-                    // CRITICAL FIX: Explicitly manage visibility of both cues
-                    cueStick.visible = isMyTurnOnline;
-                    opponentCueStick.visible = !isMyTurnOnline;
+                    cueStick.visible = true; 
                     cueBallGuide.style.display = 'none';
                 }
                 
