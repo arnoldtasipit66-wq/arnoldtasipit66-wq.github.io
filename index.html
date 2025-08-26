@@ -611,8 +611,9 @@
         const AIM_UPDATE_THROTTLE = 50; 
         let lastCueBallUpdateTime = 0;
         const CUE_BALL_UPDATE_THROTTLE = 50; 
-        // **BUG FIX**: Variable para masubaybayan ang huling turn message
         let lastDisplayedTurnUid = null;
+        // **BUG FIX v2**: Lock para maiwasan ang state corruption habang nagpo-proseso ng sariling tira.
+        let isLocallyShooting = false;
 
         // --- Audio State ---
         let audioInitialized = false;
@@ -1100,24 +1101,17 @@
             
             chipsMoving = stillMoving;
             
-            // *** START OF FIX ***
-            // I-check kung ang laro ay nasa 'shooting' state at kung huminto na ang mga bola.
             if (gameState === 'shooting' && !chipsMoving) {
-                // Palitan agad ang state para hindi na muling pumasok dito.
                 gameState = 'evaluating_turn'; 
                 
-                // Tawagin ang handleTurnEnd() nang ISANG BESES lang.
                 if (isOnlineGame) {
                     if (isMyTurnOnline) {
                         handleTurnEnd();
                     }
-                    // Hindi ito tatawagin ng kalaban, na tama lang.
                 } else {
-                    // Para sa local games (vs AI)
                     handleTurnEnd();
                 }
             }
-            // *** END OF FIX ***
         }
 
         function handleChipCollision(chip1, chip2) {
@@ -1414,6 +1408,11 @@
             } catch (error) {
                 console.error("Error updating game state:", error);
                 showMessage("Connection error. Could not update game.", 3000);
+            } finally {
+                // **BUG FIX v2**: I-release ang lock pagkatapos subukang mag-update.
+                if (isOnlineGame) {
+                    isLocallyShooting = false;
+                }
             }
         }
 
@@ -1476,6 +1475,11 @@
         async function shoot(shotPower) {
             if (gameState !== 'aiming' || chipsMoving) return;
             
+            // **BUG FIX v2**: I-set ang lock bago mag-shoot sa online game.
+            if (isOnlineGame) {
+                isLocallyShooting = true;
+            }
+
             chipsPocketedInTurn = [];
             firstChipHitInTurn = null;
             shotPektusOffset = { ...pektusOffset };
@@ -1922,8 +1926,9 @@
             currentTurnUid = null;
             isMyTurnOnline = false;
             turnInProgress = false; 
-            // **BUG FIX**: I-reset ang turn message tracker
             lastDisplayedTurnUid = null;
+            // **BUG FIX v2**: I-reset ang lock.
+            isLocallyShooting = false;
             
             playerTurn = true;
             
@@ -2477,6 +2482,11 @@
         }
 
         function syncGameState(data) {
+            // **BUG FIX v2**: Kung ang local player ay kasalukuyang tumitira, huwag pansinin ang mga update.
+            if (isLocallyShooting) {
+                return;
+            }
+
             if (localPlayerId && data.players) {
                 const opponentId = localPlayerId === 'player1' ? 'player2' : 'player1';
                 const opponent = data.players[opponentId];
@@ -2547,11 +2557,10 @@
                     cueBallGuide.style.display = 'none';
                 }
                 
-                // **BUG FIX**: Ipakita lang ang turn message kapag nagbago ang turn.
                 if (gameState !== 'gameover' && data.gameState === 'playing' && currentTurnUid !== lastDisplayedTurnUid) {
                     const message = isMyTurnOnline ? "Your turn" : "Opponent's turn";
                     showMessage(message, 1500);
-                    lastDisplayedTurnUid = currentTurnUid; // I-update ang huling ipinakitang turn
+                    lastDisplayedTurnUid = currentTurnUid;
                 }
             }
             
