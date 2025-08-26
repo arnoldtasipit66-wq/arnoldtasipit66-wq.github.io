@@ -611,8 +611,6 @@
         const AIM_UPDATE_THROTTLE = 50; 
         let lastCueBallUpdateTime = 0;
         const CUE_BALL_UPDATE_THROTTLE = 50; 
-        // **BUG FIX**: Variable to track the last turn message
-        let lastDisplayedTurnUid = null;
 
         // --- Audio State ---
         let audioInitialized = false;
@@ -1912,8 +1910,6 @@
             currentTurnUid = null;
             isMyTurnOnline = false;
             turnInProgress = false; 
-            // **BUG FIX**: Reset the turn message tracker
-            lastDisplayedTurnUid = null;
             
             playerTurn = true;
             
@@ -2537,11 +2533,11 @@
                     cueBallGuide.style.display = 'none';
                 }
                 
-                // **BUG FIX**: Show turn message only once when the turn changes.
-                if (gameState !== 'gameover' && data.gameState === 'playing' && currentTurnUid !== lastDisplayedTurnUid) {
+                if (gameState !== 'gameover' && data.gameState === 'playing') {
                     const message = isMyTurnOnline ? "Your turn" : "Opponent's turn";
-                    showMessage(message, 1500);
-                    lastDisplayedTurnUid = currentTurnUid; // Update the last displayed turn
+                    if (messageBox.textContent !== message || messageBox.style.display === 'none') {
+                         showMessage(message, 1500);
+                    }
                 }
             }
             
