@@ -560,8 +560,10 @@
         const HOLE_RADIUS = 40;
         const FRICTION = 0.99; 
         const MIN_VELOCITY = 0.05;
-        const ROTATION_SPEED = 0.03;
+        const ROTATION_SPEED = 0.001;
         
+        const DEBUG_MODE = false; 
+
         // --- Game State Variables ---
         let scale = 1;
         let table = { width: 0, height: 0 };
@@ -605,8 +607,8 @@
         let isMyTurnOnline = false;
         let turnInProgress = false;
         let selectedOnlineGameType = 'poker';
-        let lastCueUpdateTime = 0;
-        const CUE_UPDATE_THROTTLE = 50; 
+        let lastAimUpdateTime = 0;
+        const AIM_UPDATE_THROTTLE = 50; // milliseconds
 
         // --- Audio State ---
         let audioInitialized = false;
@@ -685,17 +687,15 @@
         }
 
         function update() {
-            let angleChanged = false;
+            const oldAngle = cueStick.angle;
             if (isRotatingLeft) {
                 cueStick.angle -= ROTATION_SPEED;
-                angleChanged = true;
             }
             if (isRotatingRight) {
                 cueStick.angle += ROTATION_SPEED;
-                angleChanged = true;
             }
-            if (angleChanged) {
-                sendCueStateUpdate();
+            if (oldAngle !== cueStick.angle) {
+                updateOnlineCueState();
             }
 
             if (chipsMoving) {
@@ -1188,6 +1188,7 @@
             canMoveCueBall = true;
             gameState = 'moving';
             
+            // BUG FIX: Ensure cue stick is visible at the start of a new game.
             cueStick.visible = true;
             
             showMessage("Place the cue ball for your break shot.", 3000);
@@ -1208,8 +1209,9 @@
         // TURN LOGIC - DUAL MODE
         // =========================================================================
         async function handleTurnEnd() {
-            if (isOnlineGame && !isMyTurnOnline) return;
-            if (turnInProgress) return;
+            if (isOnlineGame && !turnInProgress) {
+                return;
+            }
             
             if (gameMode.includes('poker')) {
                 await handlePokerTurnEnd();
@@ -1221,7 +1223,6 @@
         async function handlePokerTurnEnd() {
             let foul = false;
             let switchTurn = true; 
-            let nextPlayerCanMoveCue = false;
             
             const currentPlayerHand = isOnlineGame ? playerHand : (playerTurn ? playerHand : opponentHand);
 
@@ -1269,22 +1270,25 @@
 
             if (foul) {
                 switchTurn = true; 
-                nextPlayerCanMoveCue = true;
+                canMoveCueBall = true;
+                cueBallGuide.textContent = `Ball in hand! Drag the cue ball to place it.`;
+                if ((isOnlineGame && isMyTurnOnline) || !isOnlineGame) {
+                    cueBallGuide.style.display = 'block';
+                }
             }
             
             if (checkWinCondition()) return;
 
             if (isOnlineGame) {
-                await updateOnlineGameState(switchTurn, nextPlayerCanMoveCue);
+                await updateOnlineGameState(switchTurn);
             } else {
-                updateLocalGameState(switchTurn, nextPlayerCanMoveCue);
+                updateLocalGameState(switchTurn);
             }
         }
 
         async function handleStraightBallTurnEnd() {
             let foul = false;
             let switchTurn = true;
-            let nextPlayerCanMoveCue = false;
             
             const currentPlayerColor = isOnlineGame ? playerChipsType : (playerTurn ? playerChipsType : opponentChipsType);
 
@@ -1343,7 +1347,7 @@
 
             if (foul) {
                 switchTurn = true;
-                nextPlayerCanMoveCue = true;
+                canMoveCueBall = true;
             }
             
             isBreakShot = false;
@@ -1351,13 +1355,13 @@
             if (checkWinCondition()) return;
 
             if (isOnlineGame) {
-                await updateOnlineGameState(switchTurn, nextPlayerCanMoveCue);
+                await updateOnlineGameState(switchTurn);
             } else {
-                updateLocalGameState(switchTurn, nextPlayerCanMoveCue);
+                updateLocalGameState(switchTurn);
             }
         }
 
-        async function updateOnlineGameState(switchTurn, nextPlayerCanMoveCue) {
+        async function updateOnlineGameState(switchTurn) {
             try {
                 const gameDocRef = doc(db, "games", gameId);
                 const docSnap = await getDoc(gameDocRef);
@@ -1374,7 +1378,7 @@
                 const updatedData = {
                     chips: chips.map(c => ({...c})),
                     currentTurnUid: nextTurnUid,
-                    canMoveCueBall: nextPlayerCanMoveCue,
+                    canMoveCueBall: canMoveCueBall,
                     isBreakShot: false,
                     turnInProgress: false
                 };
@@ -1400,7 +1404,7 @@
             }
         }
 
-        function updateLocalGameState(switchTurn, nextPlayerCanMoveCue) {
+        function updateLocalGameState(switchTurn) {
             if (switchTurn) {
                 playerTurn = !playerTurn;
                 const nextPlayerName = playerTurn ? 'You' : 'Opponent';
@@ -1412,15 +1416,11 @@
             updateInfoBox();
 
             if (gameState !== 'gameover') {
-                if (nextPlayerCanMoveCue) {
+                if (canMoveCueBall) {
                     gameState = 'moving';
-                    canMoveCueBall = true;
-                    cueBallGuide.textContent = `Ball in hand! Drag the cue ball to place it.`;
-                    cueBallGuide.style.display = 'block';
                     if (gameMode.includes('ai') && !playerTurn) placeCueChipForAI();
                 } else {
                     gameState = 'aiming';
-                    canMoveCueBall = false;
                     cueStick.visible = true;
                     if (gameMode.includes('ai') && !playerTurn) setTimeout(aiTurn, 1000);
                 }
@@ -1460,12 +1460,9 @@
             return false;
         }
 
-        async function shoot() {
+        async function shoot(shotPower) {
             if (gameState !== 'aiming' || chipsMoving) return;
             
-            const power = (cueStick.pullback / (150 * scale)) * 30 + 5;
-            if (power <= 5) return;
-
             chipsPocketedInTurn = [];
             firstChipHitInTurn = null;
             shotPektusOffset = { ...pektusOffset };
@@ -1473,28 +1470,11 @@
             const shotData = {
                 uid: localPlayerUid,
                 angle: cueStick.angle,
-                power: power,
+                power: shotPower,
                 pektus: shotPektusOffset,
                 timestamp: Date.now()
             };
 
-            if (isOnlineGame) {
-                try {
-                    const gameDocRef = doc(db, "games", gameId);
-                    await updateDoc(gameDocRef, { 
-                        lastShot: shotData,
-                        turnInProgress: true 
-                    });
-                } catch (error) {
-                    console.error("Error sending shot data:", error);
-                    showMessage("Could not send shot. Check connection.", 2000);
-                }
-            } else {
-                animateAndApplyShot(shotData);
-            }
-        }
-        
-        function animateAndApplyShot(shotData) {
             gameState = 'shooting_animation';
             
             let startTime = null;
@@ -1510,20 +1490,35 @@
                 if (progress < 1) {
                     requestAnimationFrame(animateShot);
                 } else {
-                    applyShot(shotData);
+                    cueStick.visible = false;
+                    cueStick.power = 0;
+                    powerBar.style.height = '0%';
+                    cueStick.pullback = 0;
+
+                    if (isOnlineGame) {
+                        applyShot(shotData); 
+                        try {
+                            const gameDocRef = doc(db, "games", gameId);
+                            updateDoc(gameDocRef, { 
+                                lastShot: shotData,
+                                turnInProgress: true 
+                            });
+                        } catch (error) {
+                            console.error("Error sending shot data:", error);
+                        }
+                    } else {
+                        applyShot(shotData);
+                    }
                 }
             }
+
             requestAnimationFrame(animateShot);
         }
-
+        
         function applyShot(shotData) {
             const cueChip = chips[0];
             if (!cueChip || !cueChip.inPlay) return;
             
-            cueStick.visible = false;
-            cueStick.power = 0;
-            powerBar.style.height = '0%';
-            cueStick.pullback = 0;
             shotPektusOffset = shotData.pektus || { x: 0, y: 0 };
 
             cueChip.vx = Math.cos(shotData.angle) * shotData.power * scale;
@@ -1534,9 +1529,8 @@
 
         async function endGame(winnerTextMessage) {
             if (gameState === 'gameover') return;
-            gameState = 'gameover'; 
 
-            if (isOnlineGame && isMyTurnOnline) {
+            if (isOnlineGame && turnInProgress) {
                 try {
                     const gameDocRef = doc(db, "games", gameId);
                     const docSnap = await getDoc(gameDocRef);
@@ -1568,6 +1562,7 @@
                 }
             }
             
+            gameState = 'gameover';
             winnerText.textContent = winnerTextMessage;
 
             if (gameMode.includes('poker')) {
@@ -1696,9 +1691,8 @@
             }
 
             cueStick.angle = bestShot.angle;
-            cueStick.pullback = bestShot.power * (150 * scale);
             
-            setTimeout(shoot, 700);
+            setTimeout(() => shoot(bestShot.power * 30 + 5), 700);
         }
         
         function placeCueChipForAI() {
@@ -1772,6 +1766,16 @@
         // =========================================================================
         // UI & EVENT HANDLING
         // =========================================================================
+
+        // **MOBILE FIX**: Helper function for touch and mouse events
+        function addClickAndTouchListener(element, handler) {
+            if (!element) return;
+            // Use 'pointerdown' for modern browsers which unifies mouse and touch
+            element.addEventListener('pointerdown', (e) => {
+                e.preventDefault(); // Prevent default actions like text selection or scrolling
+                handler(e);
+            });
+        }
 
         function toggleFullScreen() {
             if (!document.fullscreenElement) {
@@ -1938,27 +1942,28 @@
                 }
             });
 
-            fullscreenButton.addEventListener('click', toggleFullScreen);
+            // **MOBILE FIX**: Replaced all '.addEventListener('click',...)' with the new helper function
+            addClickAndTouchListener(fullscreenButton, toggleFullScreen);
 
-            vsAiButton.addEventListener('click', () => { 
+            addClickAndTouchListener(vsAiButton, () => { 
                 gameModeSelect.style.display = 'none'; 
                 aiMenu.style.display = 'flex'; 
             });
             
-            aiStraightBallButton.addEventListener('click', () => { 
+            addClickAndTouchListener(aiStraightBallButton, () => { 
                 selectedGameConfig.mode = 'ai-straight-ball'; 
                 aiMenu.style.display = 'none'; 
                 difficultySelect.style.display = 'flex'; 
             });
-            aiPokerButton.addEventListener('click', () => { 
+            addClickAndTouchListener(aiPokerButton, () => { 
                 selectedGameConfig.mode = 'ai-poker'; 
                 aiMenu.style.display = 'none'; 
                 difficultySelect.style.display = 'flex'; 
             });
 
             difficultySelect.querySelectorAll('.menu-button[data-difficulty]').forEach(button => {
-                button.addEventListener('click', (e) => {
-                    selectedGameConfig.difficulty = e.target.dataset.difficulty;
+                addClickAndTouchListener(button, (e) => {
+                    selectedGameConfig.difficulty = e.currentTarget.dataset.difficulty;
                     difficultySelect.style.display = 'none';
                     if (selectedGameConfig.mode === 'ai-straight-ball') {
                         straightBallInstructions.style.display = 'flex';
@@ -1968,30 +1973,30 @@
                 });
             });
 
-            difficultyBackButton.addEventListener('click', () => {
+            addClickAndTouchListener(difficultyBackButton, () => {
                 difficultySelect.style.display = 'none';
                 aiMenu.style.display = 'flex';
             });
 
-            playStraightBallButton.addEventListener('click', () => { 
+            addClickAndTouchListener(playStraightBallButton, () => { 
                 straightBallInstructions.style.display = 'none'; 
                 initAudio(); 
                 startGame(selectedGameConfig.mode, selectedGameConfig.difficulty); 
             });
-            playPokerButton.addEventListener('click', () => { 
+            addClickAndTouchListener(playPokerButton, () => { 
                 pokerInstructions.style.display = 'none'; 
                 initAudio(); 
                 startGame(selectedGameConfig.mode, selectedGameConfig.difficulty); 
             });
             
-            aiBackButton.addEventListener('click', resetToMenu);
-            onlineSelectBackButton.addEventListener('click', resetToMenu);
-            exitButton.addEventListener('click', () => {
+            addClickAndTouchListener(aiBackButton, resetToMenu);
+            addClickAndTouchListener(onlineSelectBackButton, resetToMenu);
+            addClickAndTouchListener(exitButton, () => {
                 confirmExitModal.style.display = 'flex';
             });
-            playAgainButton.addEventListener('click', resetToMenu);
+            addClickAndTouchListener(playAgainButton, resetToMenu);
 
-            confirmExitYes.addEventListener('click', async () => {
+            addClickAndTouchListener(confirmExitYes, async () => {
                 confirmExitModal.style.display = 'none';
                 if (isOnlineGame && gameState !== 'gameover') {
                     await leaveOnlineGame();
@@ -2004,11 +2009,11 @@
                     }
                 }
             });
-            confirmExitCancel.addEventListener('click', () => {
+            addClickAndTouchListener(confirmExitCancel, () => {
                 confirmExitModal.style.display = 'none';
             });
 
-            onlineButton.addEventListener('click', () => {
+            addClickAndTouchListener(onlineButton, () => {
                 if (!firebaseInitialized) {
                     showMessage("Kailangan ng internet para sa Online Multiplayer.", 3000);
                     return;
@@ -2016,14 +2021,14 @@
                 gameModeSelect.style.display = 'none';
                 onlineGameSelect.style.display = 'flex';
             });
-            onlinePokerButton.addEventListener('click', () => { selectedOnlineGameType = 'poker'; onlineGameSelect.style.display = 'none'; onlineMenu.style.display = 'flex'; });
-            onlineStraightBallButton.addEventListener('click', () => { selectedOnlineGameType = 'straight-ball'; onlineGameSelect.style.display = 'none'; onlineMenu.style.display = 'flex'; });
-            onlineBackButton.addEventListener('click', () => { onlineMenu.style.display = 'none'; onlineGameSelect.style.display = 'flex'; });
+            addClickAndTouchListener(onlinePokerButton, () => { selectedOnlineGameType = 'poker'; onlineGameSelect.style.display = 'none'; onlineMenu.style.display = 'flex'; });
+            addClickAndTouchListener(onlineStraightBallButton, () => { selectedOnlineGameType = 'straight-ball'; onlineGameSelect.style.display = 'none'; onlineMenu.style.display = 'flex'; });
+            addClickAndTouchListener(onlineBackButton, () => { onlineMenu.style.display = 'none'; onlineGameSelect.style.display = 'flex'; });
 
-            createGameButton.addEventListener('click', createOnlineGame);
-            joinGameButton.addEventListener('click', joinOnlineGame);
-            cancelGameButton.addEventListener('click', cancelOnlineGame);
-            gameIdDisplay.addEventListener('click', () => {
+            addClickAndTouchListener(createGameButton, createOnlineGame);
+            addClickAndTouchListener(joinGameButton, joinOnlineGame);
+            addClickAndTouchListener(cancelGameButton, cancelOnlineGame);
+            addClickAndTouchListener(gameIdDisplay, () => {
                 if(navigator.clipboard && navigator.clipboard.writeText) {
                     navigator.clipboard.writeText(gameIdDisplay.textContent).then(() => {
                         showMessage("Game ID copied to clipboard!", 1500);
@@ -2046,6 +2051,7 @@
                 }
             });
 
+            // These listeners are for game controls and already handle touch events correctly
             canvas.addEventListener('mousedown', handlePointerDown);
             canvas.addEventListener('touchstart', handlePointerDown, { passive: false });
             powerControl.addEventListener('mousedown', handlePointerDown);
@@ -2112,7 +2118,7 @@
         function handlePointerUp() {
             if (isPoweringUp) {
                 isPoweringUp = false;
-                shoot();
+                shoot(cueStick.power * 30 + 5);
             }
             if (isAimingOnCanvas) {
                 isAimingOnCanvas = false;
@@ -2143,7 +2149,6 @@
 
             const MAX_PULLBACK = 150 * scale;
             cueStick.pullback = cueStick.power * MAX_PULLBACK;
-            sendCueStateUpdate(); 
         }
         
         function updateAimFromCanvas(e) {
@@ -2153,7 +2158,7 @@
             const dx = cueChip.x - pos.x;
             const dy = cueChip.y - pos.y;
             cueStick.angle = Math.atan2(dy, dx);
-            sendCueStateUpdate(); 
+            updateOnlineCueState();
         }
 
         function updateCueBallPosition(e) {
@@ -2200,27 +2205,6 @@
         // FIREBASE MULTIPLAYER LOGIC
         // =========================================================================
         
-        async function sendCueStateUpdate() {
-            if (!isOnlineGame || !isMyTurnOnline || !gameId) return;
-
-            const now = Date.now();
-            if (now - lastCueUpdateTime < CUE_UPDATE_THROTTLE) return;
-            lastCueUpdateTime = now;
-
-            try {
-                const gameDocRef = doc(db, "games", gameId);
-                const updatePath = `players.${localPlayerId}.cueState`;
-                await updateDoc(gameDocRef, {
-                    [updatePath]: {
-                        angle: cueStick.angle,
-                        pullback: cueStick.pullback 
-                    }
-                });
-            } catch (error) {
-                console.warn("Could not send cue state update:", error);
-            }
-        }
-
         function initializeFirebase() {
             try {
                 const firebaseConfig = {
@@ -2281,12 +2265,13 @@
                 gameType: selectedOnlineGameType,
                 gameState: 'waiting',
                 players: {
-                    player1: { uid: localPlayerUid, ready: true, status: 'online', cueState: { angle: 0, pullback: 0 } },
+                    player1: { uid: localPlayerUid, ready: true, status: 'online' },
                     player2: null
                 },
                 chips: chips.map(c => ({...c})),
                 currentTurnUid: localPlayerUid,
                 lastShot: null,
+                cueState: { angle: cueStick.angle, uid: localPlayerUid },
                 turnInProgress: false, 
                 canMoveCueBall: true,
                 isBreakShot: true,
@@ -2349,7 +2334,7 @@
                     listenToGameUpdates(inputId);
 
                     await updateDoc(gameDocRef, {
-                        'players.player2': { uid: localPlayerUid, ready: true, status: 'online', cueState: { angle: 0, pullback: 0 } },
+                        'players.player2': { uid: localPlayerUid, ready: true, status: 'online' },
                         'gameState': 'playing'
                     });
 
@@ -2374,6 +2359,53 @@
             resetToMenu();
         }
         
+        function animateReceivedShot(shotData) {
+            cueStick.angle = shotData.angle;
+            cueStick.visible = true;
+            gameState = 'shooting_animation';
+            
+            let startTime = null;
+            const animationDuration = 100;
+            
+            const MAX_PULLBACK = 150 * scale;
+            const shotPowerNormalized = (shotData.power - 5) / 30;
+            const startPullback = shotPowerNormalized * MAX_PULLBACK;
+            const endPullback = -30 * scale; 
+
+            function animateOpponentShot(timestamp) {
+                if (!startTime) startTime = timestamp;
+                const progress = Math.min((timestamp - startTime) / animationDuration, 1);
+                cueStick.pullback = startPullback + (endPullback - startPullback) * progress;
+
+                if (progress < 1) {
+                    requestAnimationFrame(animateOpponentShot);
+                } else {
+                    cueStick.visible = false;
+                    cueStick.pullback = 0;
+                    applyShot(shotData);
+                }
+            }
+            requestAnimationFrame(animateOpponentShot);
+        }
+
+        function updateOnlineCueState() {
+            if (isOnlineGame && isMyTurnOnline && gameId) {
+                const now = Date.now();
+                if (now - lastAimUpdateTime < AIM_UPDATE_THROTTLE) {
+                    return;
+                }
+                lastAimUpdateTime = now;
+
+                const gameDocRef = doc(db, "games", gameId);
+                updateDoc(gameDocRef, { 
+                    cueState: {
+                        angle: cueStick.angle,
+                        uid: localPlayerUid
+                    }
+                }).catch(err => console.error("Could not update cue state:", err));
+            }
+        }
+
         function listenToGameUpdates(gameId) {
             const gameDocRef = doc(db, "games", gameId);
             let lastShotTimestamp = 0;
@@ -2388,8 +2420,16 @@
                 const gameData = doc.data();
                 if (!gameData) return;
 
+                if (gameData.cueState && gameData.cueState.uid !== localPlayerUid) {
+                    if (!isMyTurnOnline && gameState === 'aiming') {
+                        cueStick.angle = gameData.cueState.angle;
+                    }
+                }
+
                 if (gameData.lastShot && gameData.lastShot.timestamp > lastShotTimestamp) {
-                    animateAndApplyShot(gameData.lastShot);
+                    if (gameData.lastShot.uid !== localPlayerUid) {
+                        animateReceivedShot(gameData.lastShot);
+                    }
                     lastShotTimestamp = gameData.lastShot.timestamp;
                 }
 
@@ -2423,21 +2463,11 @@
                 showMessage("Opponent connected! Game starting...");
             }
             
-            currentTurnUid = data.currentTurnUid;
-            isMyTurnOnline = (currentTurnUid === localPlayerUid);
-
-            if (!isMyTurnOnline) {
-                const opponentId = localPlayerId === 'player1' ? 'player2' : 'player1';
-                const opponentData = data.players ? data.players[opponentId] : null;
-                if (opponentData && opponentData.cueState) {
-                    cueStick.angle = opponentData.cueState.angle;
-                    cueStick.pullback = opponentData.cueState.pullback;
-                }
-            }
-
             turnInProgress = data.turnInProgress;
 
-            if (!turnInProgress && !chipsMoving) {
+            if (!turnInProgress) {
+                chipsMoving = false; 
+                
                 chips = data.chips.map(remoteChip => ({
                     ...remoteChip,
                     radius: (remoteChip.id === 0 ? CUE_BALL_RADIUS : BALL_RADIUS) * scale
@@ -2456,6 +2486,8 @@
                 updateCardDisplay();
                 updateInfoBox();
 
+                currentTurnUid = data.currentTurnUid;
+                isMyTurnOnline = (currentTurnUid === localPlayerUid);
                 canMoveCueBall = data.canMoveCueBall;
                 isBreakShot = data.isBreakShot;
                 
@@ -2464,7 +2496,6 @@
                 if (canMoveCueBall && isMyTurnOnline) {
                     gameState = 'moving';
                     cueBallGuide.style.display = 'block';
-                    cueBallGuide.textContent = `Ball in hand! Drag the cue ball to place it.`;
                 } else {
                     gameState = 'aiming';
                     cueStick.visible = true; 
@@ -2474,7 +2505,7 @@
                 if (gameState !== 'gameover' && data.gameState === 'playing') {
                     const message = isMyTurnOnline ? "Your turn" : "Opponent's turn";
                     if (messageBox.textContent !== message || messageBox.style.display === 'none') {
-                        showMessage(message, 1500);
+                         showMessage(message, 1500);
                     }
                 }
             }
