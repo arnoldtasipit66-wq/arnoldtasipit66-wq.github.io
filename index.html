@@ -1767,12 +1767,10 @@
         // UI & EVENT HANDLING
         // =========================================================================
 
-        // **MOBILE FIX**: Helper function for touch and mouse events
         function addClickAndTouchListener(element, handler) {
             if (!element) return;
-            // Use 'pointerdown' for modern browsers which unifies mouse and touch
             element.addEventListener('pointerdown', (e) => {
-                e.preventDefault(); // Prevent default actions like text selection or scrolling
+                e.preventDefault();
                 handler(e);
             });
         }
@@ -1942,7 +1940,6 @@
                 }
             });
 
-            // **MOBILE FIX**: Replaced all '.addEventListener('click',...)' with the new helper function
             addClickAndTouchListener(fullscreenButton, toggleFullScreen);
 
             addClickAndTouchListener(vsAiButton, () => { 
@@ -2051,7 +2048,6 @@
                 }
             });
 
-            // These listeners are for game controls and already handle touch events correctly
             canvas.addEventListener('mousedown', handlePointerDown);
             canvas.addEventListener('touchstart', handlePointerDown, { passive: false });
             powerControl.addEventListener('mousedown', handlePointerDown);
@@ -2128,6 +2124,19 @@
                 canMoveCueBall = false;
                 gameState = 'aiming';
                 cueBallGuide.style.display = 'none';
+
+                // **BUG FIX**: I-sync ang pwesto ng cue ball pagkatapos ilagay
+                if (isOnlineGame && isMyTurnOnline) {
+                    try {
+                        const gameDocRef = doc(db, "games", gameId);
+                        updateDoc(gameDocRef, {
+                            chips: chips.map(c => ({...c})), // Ipadala ang bagong pwesto ng mga bola
+                            canMoveCueBall: false // Sabihin na tapos na ang paglalagay
+                        });
+                    } catch (error) {
+                        console.error("Error syncing cue ball placement:", error);
+                    }
+                }
             }
             isDraggingPektusDot = false;
             isRotatingLeft = false;
