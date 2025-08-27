@@ -32,7 +32,7 @@
             align-items: center;
         }
         #game-canvas {
-            background-color: #c8a078;
+            background-color: #F5DEB3;
             border: 10px solid #4a2a00;
             box-shadow: 0 0 20px rgba(0,0,0,0.5);
             border-radius: 15px;
@@ -771,10 +771,10 @@
 
         function setupChips() {
             chips = [];
-            // CHANGE: Cue ball color is now white
+            // CHANGE: Cue ball color is now grey
             const newChip = { 
                 id: 0, x: table.width * 0.25, y: table.height / 2, 
-                vx: 0, vy: 0, radius: CUE_BALL_RADIUS * scale, inPlay: true, color: '#FFFFFF', type: 'cue',
+                vx: 0, vy: 0, radius: CUE_BALL_RADIUS * scale, inPlay: true, color: '#808080', type: 'cue',
                 isPocketing: false, pocketingProgress: 0, pocketingHole: null
             };
             chips.push(newChip);
@@ -883,11 +883,11 @@
 
                     // 1. Draw the main body which will cast the shadow.
                     // For numbered chips, this is the transparent part.
-                    // For the cue chip, it's the main white body.
+                    // For the cue chip, it's the main grey body.
                     ctx.beginPath();
                     ctx.arc(chip.x, chip.y, displayRadius, 0, Math.PI * 2);
                     if (chip.id === 0) {
-                        ctx.fillStyle = chip.color; // White for cue chip
+                        ctx.fillStyle = chip.color; // Grey for cue chip
                     } else {
                         ctx.fillStyle = 'rgba(255, 255, 255, 0.2)'; // Semi-transparent for acrylic
                     }
@@ -913,8 +913,8 @@
 
                     // 5. Draw the details (numbers or cue chip design)
                     if (chip.id === 0) { // Cue Chip ("Pamato")
-                        // CHANGE: Concentric circles are now dark to be visible on white
-                        ctx.strokeStyle = 'rgba(0, 0, 0, 0.15)'; 
+                        // Concentric circles are a mix of light and dark for depth on grey
+                        ctx.strokeStyle = 'rgba(0, 0, 0, 0.25)'; // Darker lines
                         ctx.lineWidth = 2 * scale;
                         
                         ctx.beginPath();
@@ -925,9 +925,15 @@
                         ctx.arc(chip.x, chip.y, displayRadius * 0.5, 0, Math.PI * 2);
                         ctx.stroke();
 
+                        // Add a subtle highlight
+                        ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+                        ctx.beginPath();
+                        ctx.arc(chip.x, chip.y, displayRadius * 0.8 + (1 * scale), 0, Math.PI * 2);
+                        ctx.stroke();
+
                         ctx.beginPath();
                         ctx.arc(chip.x, chip.y, displayRadius * 0.2, 0, Math.PI * 2);
-                        ctx.fillStyle = 'rgba(0, 0, 0, 0.1)'; // Subtle dark center
+                        ctx.fillStyle = 'rgba(0, 0, 0, 0.2)'; // Darker center
                         ctx.fill();
 
                     } else { // Numbered Chips
