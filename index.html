@@ -607,9 +607,6 @@
         let isMyTurnOnline = false;
         let turnInProgress = false;
         let selectedOnlineGameType = 'poker';
-        // NEW: Real-time sync throttling
-        let lastAimUpdateTime = 0;
-        const AIM_UPDATE_INTERVAL = 50; // ms
 
         // --- Audio State ---
         let audioInitialized = false;
@@ -688,10 +685,11 @@
         }
 
         function update() {
-            if (isRotatingLeft || isRotatingRight) {
-                if (isRotatingLeft) cueStick.angle -= ROTATION_SPEED;
-                if (isRotatingRight) cueStick.angle += ROTATION_SPEED;
-                sendRealtimeUpdate();
+            if (isRotatingLeft) {
+                cueStick.angle -= ROTATION_SPEED;
+            }
+            if (isRotatingRight) {
+                cueStick.angle += ROTATION_SPEED;
             }
 
             if (chipsMoving) {
@@ -706,7 +704,7 @@
             drawTable();
             drawChips();
 
-            if (gameState === 'aiming' || gameState === 'shooting_animation' || gameState === 'moving') {
+            if (gameState === 'aiming' || gameState === 'shooting_animation') {
                  drawCueStick();
             }
 
@@ -1497,8 +1495,7 @@
                             const gameDocRef = doc(db, "games", gameId);
                             updateDoc(gameDocRef, { 
                                 lastShot: shotData,
-                                turnInProgress: true,
-                                aimingState: null // Clear aiming state after shot
+                                turnInProgress: true 
                             });
                         } catch (error) {
                             console.error("Error sending shot data:", error);
@@ -2094,11 +2091,9 @@
             if (isPoweringUp) { e.preventDefault(); updatePower(e); }
             if (isAimingOnCanvas) { e.preventDefault(); updateAimFromCanvas(e); }
             if (isDraggingCueBall) { e.preventDefault(); updateCueBallPosition(e); }
-            if (isDraggingPektusDot) { e.preventDefault(); handlePektusInput(e); }
-            
-            // NEW: Send real-time updates during mouse/touch move
-            if (isOnlineGame && isMyTurnOnline && (isPoweringUp || isAimingOnCanvas || isDraggingCueBall || isDraggingPektusDot)) {
-                sendRealtimeUpdate();
+            if (isDraggingPektusDot) {
+                e.preventDefault();
+                handlePektusInput(e);
             }
         }
 
@@ -2115,7 +2110,6 @@
                 canMoveCueBall = false;
                 gameState = 'aiming';
                 cueBallGuide.style.display = 'none';
-                sendRealtimeUpdate(); // Send final position
             }
             isDraggingPektusDot = false;
             isRotatingLeft = false;
@@ -2262,8 +2256,7 @@
                 canMoveCueBall: true,
                 isBreakShot: true,
                 winner: null,
-                createdAt: Date.now(),
-                aimingState: null // NEW: For real-time sync
+                createdAt: Date.now()
             };
 
             if (selectedOnlineGameType === 'poker') {
@@ -2375,35 +2368,6 @@
             requestAnimationFrame(animateOpponentShot);
         }
 
-        // NEW: Function to send real-time aiming data
-        function sendRealtimeUpdate() {
-            if (!isOnlineGame || !isMyTurnOnline || gameState === 'shooting' || gameState === 'shooting_animation') return;
-
-            const now = Date.now();
-            if (now - lastAimUpdateTime < AIM_UPDATE_INTERVAL) return;
-            lastAimUpdateTime = now;
-
-            const updateData = {
-                angle: cueStick.angle,
-                pullback: cueStick.pullback,
-                pektus: { ...pektusOffset }
-            };
-
-            if (isDraggingCueBall) {
-                const cueChip = chips[0];
-                updateData.cueBall = { x: cueChip.x, y: cueChip.y };
-            } else {
-                updateData.cueBall = null;
-            }
-
-            const gameDocRef = doc(db, "games", gameId);
-            updateDoc(gameDocRef, { aimingState: updateData }).catch(err => {
-                // This can fail if the connection is spotty, which is okay for transient data.
-                // console.error("Error sending realtime update:", err);
-            });
-        }
-
-
         function listenToGameUpdates(gameId) {
             const gameDocRef = doc(db, "games", gameId);
             let lastShotTimestamp = 0;
@@ -2418,7 +2382,6 @@
                 const gameData = doc.data();
                 if (!gameData) return;
 
-                // Handle animating the shot separately, as it's an event
                 if (gameData.lastShot && gameData.lastShot.timestamp > lastShotTimestamp) {
                     if (gameData.lastShot.uid !== localPlayerUid) {
                         animateReceivedShot(gameData.lastShot);
@@ -2426,25 +2389,23 @@
                     lastShotTimestamp = gameData.lastShot.timestamp;
                 }
 
-                // Sync the rest of the state
                 syncGameState(gameData);
             });
         }
 
-        // REVISED & FIXED: This function now correctly handles state synchronization to prevent game freezes.
         function syncGameState(data) {
-            // Handle opponent disconnect
             if (localPlayerId && data.players) {
                 const opponentId = localPlayerId === 'player1' ? 'player2' : 'player1';
                 const opponent = data.players[opponentId];
+
                 if (opponent && opponent.status === 'disconnected' && gameState !== 'gameover') {
                     endGame("You Win!");
                     return;
                 }
             }
 
-            // Handle game start
             const isCurrentlyInMenu = (gameState === 'menu' || waitingRoom.style.display === 'flex');
+            
             if (data.gameState === 'playing' && isCurrentlyInMenu) {
                 isOnlineGame = true;
                 gameMode = `online-${data.gameType}`;
@@ -2458,116 +2419,60 @@
                 showMessage("Opponent connected! Game starting...");
             }
             
-            // Handle game end
+            turnInProgress = data.turnInProgress;
+
+            if (!turnInProgress) {
+                chipsMoving = false; 
+                
+                chips = data.chips.map(remoteChip => ({
+                    ...remoteChip,
+                    radius: (remoteChip.id === 0 ? CUE_BALL_RADIUS : BALL_RADIUS) * scale
+                }));
+
+                if (data.gameType === 'poker') {
+                    playerHand = (localPlayerId === 'player1') ? data.player1Hand : data.player2Hand;
+                    opponentHand = (localPlayerId === 'player1') ? data.player2Hand : data.player1Hand;
+                    originalPlayerHand = (localPlayerId === 'player1') ? data.originalPlayer1Hand : data.originalPlayer2Hand;
+                    originalOpponentHand = (localPlayerId === 'player1') ? data.originalPlayer2Hand : data.originalPlayer1Hand;
+                } else {
+                    colorsAssigned = data.colorsAssigned;
+                    playerChipsType = (localPlayerId === 'player1') ? data.player1ChipsType : data.player2ChipsType;
+                    opponentChipsType = (localPlayerId === 'player1') ? data.player2ChipsType : data.player1ChipsType;
+                }
+                updateCardDisplay();
+                updateInfoBox();
+
+                currentTurnUid = data.currentTurnUid;
+                isMyTurnOnline = (currentTurnUid === localPlayerUid);
+                canMoveCueBall = data.canMoveCueBall;
+                isBreakShot = data.isBreakShot;
+                
+                resetPektus();
+
+                if (canMoveCueBall && isMyTurnOnline) {
+                    gameState = 'moving';
+                    cueBallGuide.style.display = 'block';
+                } else {
+                    gameState = 'aiming';
+                    // Make cue stick visible for whosever turn it is
+                    cueStick.visible = true; 
+                    cueBallGuide.style.display = 'none';
+                }
+                
+                if (gameState !== 'gameover' && data.gameState === 'playing') {
+                    const message = isMyTurnOnline ? "Your turn" : "Opponent's turn";
+                    if (messageBox.textContent !== message || messageBox.style.display === 'none') {
+                        showMessage(message, 1500);
+                    }
+                }
+            }
+            
             if (data.gameState === 'finished' && gameState !== 'gameover') {
                 const winnerName = data.winner === localPlayerUid ? 'You Win!' : 'Opponent Wins!';
                 endGame(winnerName);
                 return;
             }
-
-            // BUG FIX: The original code had a 'if (chipsMoving) return;' here.
-            // This was causing a state lock. If the server's "turn over" message arrived
-            // while the local client's balls were still doing their final roll, the message
-            // would be ignored, and the client would get stuck thinking it was still their
-            // turn and that a turn was in progress.
-            // The new logic below will always sync the critical turn information,
-            // and will only defer the visual syncing of ball positions to prevent jarring snaps.
-
-            // Always sync critical turn-related state immediately.
-            turnInProgress = data.turnInProgress;
-            currentTurnUid = data.currentTurnUid;
-            isMyTurnOnline = (currentTurnUid === localPlayerUid);
-
-            // If balls are moving locally, we've synced the important turn data,
-            // so we can wait for the next update to sync the final ball positions.
-            // This prevents balls from visually snapping while they are still rolling.
-            if (chipsMoving) {
-                return;
-            }
-
-            // --- FULL STATE SYNC WHEN NOT MOVING ---
-            // Sync game data (poker hands, ball colors)
-            if (data.gameType === 'poker') {
-                playerHand = (localPlayerId === 'player1') ? data.player1Hand : data.player2Hand;
-                opponentHand = (localPlayerId === 'player1') ? data.player2Hand : data.player1Hand;
-                originalPlayerHand = (localPlayerId === 'player1') ? data.originalPlayer1Hand : data.originalPlayer2Hand;
-                originalOpponentHand = (localPlayerId === 'player1') ? data.originalPlayer2Hand : data.originalPlayer1Hand;
-            } else {
-                colorsAssigned = data.colorsAssigned;
-                playerChipsType = (localPlayerId === 'player1') ? data.player1ChipsType : data.player2ChipsType;
-                opponentChipsType = (localPlayerId === 'player1') ? data.player2ChipsType : data.player1ChipsType;
-            }
-            updateCardDisplay();
-            updateInfoBox();
-
-            // Sync authoritative ball positions now that we know they aren't moving locally.
-            if (data.chips) {
-                chips = data.chips.map(remoteChip => ({
-                    ...remoteChip,
-                    radius: (remoteChip.id === 0 ? CUE_BALL_RADIUS : BALL_RADIUS) * scale
-                }));
-            }
-
-            // Sync turn state
-            canMoveCueBall = data.canMoveCueBall;
-            isBreakShot = data.isBreakShot;
-            
-            // --- Determine current action based on synced state ---
-            if (isMyTurnOnline) {
-                // It's my turn
-                if (canMoveCueBall && !isDraggingCueBall) {
-                    gameState = 'moving';
-                    cueBallGuide.style.display = 'block';
-                } else if (!canMoveCueBall) {
-                    gameState = 'aiming';
-                    cueStick.visible = true;
-                    cueBallGuide.style.display = 'none';
-                }
-                const msg = messageBox.textContent;
-                if (!msg.includes("Your turn") && !msg.includes("Foul")) {
-                    showMessage("Your turn", 1500);
-                }
-            } else {
-                // It's the opponent's turn
-                cueBallGuide.style.display = 'none';
-                resetPektus(); // Reset our pektus control when it's not our turn
-
-                // Check if opponent is aiming or placing the ball based on real-time data
-                if (data.aimingState) {
-                    const { angle, pullback, pektus, cueBall } = data.aimingState;
-                    cueStick.angle = angle;
-                    cueStick.pullback = pullback;
-                    if (pektus) {
-                        pektusOffset.x = pektus.x;
-                        pektusOffset.y = pektus.y;
-                        updatePektusUI();
-                    }
-
-                    if (cueBall && canMoveCueBall) {
-                        gameState = 'moving';
-                        cueStick.visible = false;
-                        const localCueChip = chips.find(c => c.id === 0);
-                        if (localCueChip) {
-                            localCueChip.x = cueBall.x;
-                            localCueChip.y = cueBall.y;
-                        }
-                    } else {
-                        gameState = 'aiming';
-                        cueStick.visible = true;
-                    }
-                } else {
-                    // Default state for opponent's turn if no aiming data
-                    gameState = 'aiming';
-                    cueStick.visible = true;
-                    cueStick.pullback = 0; // No pullback if no data
-                }
-                const msg = messageBox.textContent;
-                if (!msg.includes("Opponent's turn") && !msg.includes("Foul")) {
-                    showMessage("Opponent's turn", 1500);
-                }
-            }
         }
-
 
         // =========================================================================
         // START THE GAME
