@@ -773,7 +773,7 @@
             chips = [];
             const newChip = { 
                 id: 0, x: table.width * 0.25, y: table.height / 2, 
-                vx: 0, vy: 0, radius: CUE_BALL_RADIUS * scale, inPlay: true, color: 'white', type: 'cue',
+                vx: 0, vy: 0, radius: CUE_BALL_RADIUS * scale, inPlay: true, color: '#1C1C1C', type: 'cue',
                 isPocketing: false, pocketingProgress: 0, pocketingHole: null
             };
             chips.push(newChip);
@@ -784,9 +784,9 @@
             const blueChipsSource = [];
             for (let i = 1; i <= 12; i++) {
                 if (i <= 6) { 
-                    blueChipsSource.push({ id: i, color: '#007BFF', type: 'blue' });
+                    blueChipsSource.push({ id: i, color: '#0033A0', type: 'blue' }); // Darker Blue
                 } else { 
-                    redChipsSource.push({ id: i, color: '#DC3545', type: 'red' });
+                    redChipsSource.push({ id: i, color: '#C8102E', type: 'red' }); // Darker Red
                 }
             }
             
@@ -857,8 +857,17 @@
                 ctx.fill();
             });
         }
-
+        
+        // =========================================================================
+        // REALISTIC ACRYLIC CHIP DRAWING LOGIC (NEW)
+        // =========================================================================
         function drawChips() {
+            // A subtle shadow for all chips
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
+            ctx.shadowBlur = 5 * scale;
+            ctx.shadowOffsetX = 2 * scale;
+            ctx.shadowOffsetY = 3 * scale;
+
             chips.forEach(chip => {
                 if (chip.inPlay) {
                     let displayRadius = chip.radius;
@@ -866,34 +875,95 @@
                         displayRadius = chip.radius * (1 - chip.pocketingProgress);
                     }
 
+                    // For numbered chips, the inner colored part is smaller
+                    const innerRadius = (chip.id === 0) ? displayRadius * 0.95 : displayRadius * 0.75;
+
+                    // 1. Draw the main body which will cast the shadow.
+                    // For numbered chips, this is the transparent part.
+                    // For the cue chip, it's the main black body.
                     ctx.beginPath();
                     ctx.arc(chip.x, chip.y, displayRadius, 0, Math.PI * 2);
-                    ctx.fillStyle = chip.color;
-                    ctx.fill();
-                    ctx.strokeStyle = 'rgba(0, 0, 0, 0.4)';
-                    ctx.lineWidth = displayRadius * 0.2;
-                    ctx.stroke();
-
                     if (chip.id === 0) {
-                        ctx.strokeStyle = '#808080';
-                        ctx.lineWidth = displayRadius * 0.1;
-                        ctx.beginPath();
-                        ctx.arc(chip.x, chip.y, displayRadius * 0.6, 0, Math.PI * 2);
+                        ctx.fillStyle = chip.color; // Black for cue chip
+                    } else {
+                        ctx.fillStyle = 'rgba(255, 255, 255, 0.2)'; // Semi-transparent for acrylic
+                    }
+                    ctx.fill();
+
+                    // 2. Draw a subtle border on the transparent part for a glassy edge effect
+                    if (chip.id !== 0) {
+                        ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+                        ctx.lineWidth = 1.5 * scale;
                         ctx.stroke();
-                        ctx.fillStyle = '#808080';
+                    }
+
+                    // 3. Turn off shadows for drawing elements ON TOP of the chip
+                    ctx.shadowColor = 'transparent';
+
+                    // 4. Draw the colored inner circle for numbered chips
+                    if (chip.id !== 0) {
+                        ctx.beginPath();
+                        ctx.arc(chip.x, chip.y, innerRadius, 0, Math.PI * 2);
+                        ctx.fillStyle = chip.color;
+                        ctx.fill();
+                    }
+
+                    // 5. Draw the details (numbers or cue chip design)
+                    if (chip.id === 0) { // Cue Chip ("Pamato")
+                        // Create the concentric circles effect
+                        ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+                        ctx.lineWidth = 2 * scale;
+                        
+                        ctx.beginPath();
+                        ctx.arc(chip.x, chip.y, displayRadius * 0.8, 0, Math.PI * 2);
+                        ctx.stroke();
+
+                        ctx.beginPath();
+                        ctx.arc(chip.x, chip.y, displayRadius * 0.5, 0, Math.PI * 2);
+                        ctx.stroke();
+
                         ctx.beginPath();
                         ctx.arc(chip.x, chip.y, displayRadius * 0.2, 0, Math.PI * 2);
+                        ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
                         ctx.fill();
-                    } else {
+
+                    } else { // Numbered Chips
+                        // Draw the number
                         ctx.fillStyle = 'white';
-                        ctx.font = `bold ${displayRadius * 1.2}px Arial`;
+                        ctx.font = `bold ${innerRadius * 1.1}px Arial, sans-serif`;
                         ctx.textAlign = 'center';
                         ctx.textBaseline = 'middle';
-                        ctx.fillText(chip.id, chip.x, chip.y);
+                        
+                        // Adjust text position based on whether there's sub-text
+                        let textY = chip.y;
+                        const hasSubtext = chip.id === 6 || chip.id === 9;
+                        if (hasSubtext) {
+                            textY -= innerRadius * 0.2;
+                        }
+                        ctx.fillText(chip.id, chip.x, textY);
+
+                        // Add sub-text for specific numbers
+                        if (chip.id === 6) {
+                            ctx.font = `bold ${innerRadius * 0.4}px Arial, sans-serif`;
+                            ctx.fillText('SIX', chip.x, textY + innerRadius * 0.6);
+                        } else if (chip.id === 9) {
+                            ctx.font = `bold ${innerRadius * 0.4}px Arial, sans-serif`;
+                            ctx.fillText('NINE', chip.x, textY + innerRadius * 0.6);
+                        }
                     }
+                    
+                    // 6. Restore shadow settings for the next chip
+                    ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
                 }
             });
+
+            // 7. Reset all shadow properties after the loop
+            ctx.shadowColor = 'transparent';
+            ctx.shadowBlur = 0;
+            ctx.shadowOffsetX = 0;
+            ctx.shadowOffsetY = 0;
         }
+
 
         function drawCueStick() {
             if (!cueStick.visible || !chips[0] || !chips[0].inPlay) return;
