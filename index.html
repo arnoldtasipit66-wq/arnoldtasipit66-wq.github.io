@@ -879,7 +879,7 @@
                     }
 
                     // For numbered chips, the inner colored part is smaller
-                    const innerRadius = (chip.id === 0) ? displayRadius * 0.95 : displayRadius
+                    const innerRadius = (chip.id === 0) ? displayRadius * 0.95 : displayRadius  * 0.85
 
                     // 1. Draw the main body which will cast the shadow.
                     // For numbered chips, this is the transparent part.
@@ -895,9 +895,9 @@
 
                     // 2. Draw a subtle border on the transparent part for a glassy edge effect
                     if (chip.id !== 0) {
-                        ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+                        ctx.strokeStyle = '#000000'; 
                         ctx.lineWidth = 1 * scale;
-                    // ctx.stroke();
+                        ctx.stroke();
                     }
 
                     // 3. Turn off shadows for drawing elements ON TOP of the chip
@@ -939,7 +939,7 @@
                     } else { // Numbered Chips
                         // Draw the number
                         ctx.fillStyle = 'white';
-                        ctx.font = `bold ${innerRadius * 1.3}px Arial, sans-serif`;
+                        ctx.font = `bold ${innerRadius * 1.5}px Arial, sans-serif`;
                         ctx.textAlign = 'center';
                         ctx.textBaseline = 'middle';
                         
