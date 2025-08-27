@@ -2431,7 +2431,7 @@
             });
         }
 
-        // REVISED: syncGameState to handle real-time updates
+        // REVISED & FIXED: This function now correctly handles state synchronization to prevent game freezes.
         function syncGameState(data) {
             // Handle opponent disconnect
             if (localPlayerId && data.players) {
@@ -2465,14 +2465,27 @@
                 return;
             }
 
-            // Don't sync state while a shot is physically animating on our screen
-            if (chipsMoving) return;
+            // BUG FIX: The original code had a 'if (chipsMoving) return;' here.
+            // This was causing a state lock. If the server's "turn over" message arrived
+            // while the local client's balls were still doing their final roll, the message
+            // would be ignored, and the client would get stuck thinking it was still their
+            // turn and that a turn was in progress.
+            // The new logic below will always sync the critical turn information,
+            // and will only defer the visual syncing of ball positions to prevent jarring snaps.
 
-            // --- CORE STATE SYNC ---
+            // Always sync critical turn-related state immediately.
             turnInProgress = data.turnInProgress;
             currentTurnUid = data.currentTurnUid;
             isMyTurnOnline = (currentTurnUid === localPlayerUid);
 
+            // If balls are moving locally, we've synced the important turn data,
+            // so we can wait for the next update to sync the final ball positions.
+            // This prevents balls from visually snapping while they are still rolling.
+            if (chipsMoving) {
+                return;
+            }
+
+            // --- FULL STATE SYNC WHEN NOT MOVING ---
             // Sync game data (poker hands, ball colors)
             if (data.gameType === 'poker') {
                 playerHand = (localPlayerId === 'player1') ? data.player1Hand : data.player2Hand;
@@ -2487,8 +2500,8 @@
             updateCardDisplay();
             updateInfoBox();
 
-            // Sync authoritative ball positions (only when turn is not in progress)
-            if (!turnInProgress) {
+            // Sync authoritative ball positions now that we know they aren't moving locally.
+            if (data.chips) {
                 chips = data.chips.map(remoteChip => ({
                     ...remoteChip,
                     radius: (remoteChip.id === 0 ? CUE_BALL_RADIUS : BALL_RADIUS) * scale
