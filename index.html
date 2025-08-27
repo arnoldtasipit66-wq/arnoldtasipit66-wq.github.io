@@ -771,9 +771,10 @@
 
         function setupChips() {
             chips = [];
+            // CHANGE: Cue ball color is now white
             const newChip = { 
                 id: 0, x: table.width * 0.25, y: table.height / 2, 
-                vx: 0, vy: 0, radius: CUE_BALL_RADIUS * scale, inPlay: true, color: '#1C1C1C', type: 'cue',
+                vx: 0, vy: 0, radius: CUE_BALL_RADIUS * scale, inPlay: true, color: '#FFFFFF', type: 'cue',
                 isPocketing: false, pocketingProgress: 0, pocketingHole: null
             };
             chips.push(newChip);
@@ -783,10 +784,11 @@
             const redChipsSource = [];
             const blueChipsSource = [];
             for (let i = 1; i <= 12; i++) {
+                // Use colors from the image
                 if (i <= 6) { 
-                    blueChipsSource.push({ id: i, color: '#0033A0', type: 'blue' }); // Darker Blue
+                    redChipsSource.push({ id: i, color: '#C8102E', type: 'red' }); 
                 } else { 
-                    redChipsSource.push({ id: i, color: '#C8102E', type: 'red' }); // Darker Red
+                    blueChipsSource.push({ id: i, color: '#0033A0', type: 'blue' });
                 }
             }
             
@@ -811,13 +813,14 @@
                 }
             }
 
+            // Arrange chips to match red/blue groups
+            const chipDataOrder = [
+                ...redChipsSource,
+                ...blueChipsSource
+            ];
+
             for (let i = 0; i < positions.length; i++) {
-                let chipData;
-                if (i % 2 === 0) {
-                    chipData = redChipsSource.pop();
-                } else {
-                    chipData = blueChipsSource.pop();
-                }
+                let chipData = chipDataOrder[i];
 
                 if (chipData) {
                     const newObjectChip = {
@@ -859,7 +862,7 @@
         }
         
         // =========================================================================
-        // REALISTIC ACRYLIC CHIP DRAWING LOGIC (NEW)
+        // REALISTIC ACRYLIC CHIP DRAWING LOGIC (REVISED)
         // =========================================================================
         function drawChips() {
             // A subtle shadow for all chips
@@ -880,11 +883,11 @@
 
                     // 1. Draw the main body which will cast the shadow.
                     // For numbered chips, this is the transparent part.
-                    // For the cue chip, it's the main black body.
+                    // For the cue chip, it's the main white body.
                     ctx.beginPath();
                     ctx.arc(chip.x, chip.y, displayRadius, 0, Math.PI * 2);
                     if (chip.id === 0) {
-                        ctx.fillStyle = chip.color; // Black for cue chip
+                        ctx.fillStyle = chip.color; // White for cue chip
                     } else {
                         ctx.fillStyle = 'rgba(255, 255, 255, 0.2)'; // Semi-transparent for acrylic
                     }
@@ -910,8 +913,8 @@
 
                     // 5. Draw the details (numbers or cue chip design)
                     if (chip.id === 0) { // Cue Chip ("Pamato")
-                        // Create the concentric circles effect
-                        ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+                        // CHANGE: Concentric circles are now dark to be visible on white
+                        ctx.strokeStyle = 'rgba(0, 0, 0, 0.15)'; 
                         ctx.lineWidth = 2 * scale;
                         
                         ctx.beginPath();
@@ -924,7 +927,7 @@
 
                         ctx.beginPath();
                         ctx.arc(chip.x, chip.y, displayRadius * 0.2, 0, Math.PI * 2);
-                        ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+                        ctx.fillStyle = 'rgba(0, 0, 0, 0.1)'; // Subtle dark center
                         ctx.fill();
 
                     } else { // Numbered Chips
