@@ -613,7 +613,7 @@
         const CUE_BALL_UPDATE_THROTTLE = 50; 
         let lastDisplayedTurnUid = null;
         // **FINAL FIX**: This flag is the key. It tells the client to ignore server updates while its own shot is resolving.
-        let isAwaitingTurnResult = false;
+        let isProcessingShot = false;
 
         // --- Audio State ---
         let audioInitialized = false;
@@ -1373,7 +1373,7 @@
                 const gameDocRef = doc(db, "games", gameId);
                 const docSnap = await getDoc(gameDocRef);
                 if (!docSnap.exists()) {
-                    isAwaitingTurnResult = false; 
+                    isProcessingShot = false; 
                     return;
                 }
                 const gameData = docSnap.data();
@@ -1408,8 +1408,6 @@
                 }
                 
                 // **FINAL FIX**: Update local state immediately *before* sending to the server.
-                // This ensures the local client is already in the correct state and won't be
-                // confused by the server's echo of its own update.
                 isMyTurnOnline = (nextTurnUid === localPlayerUid);
                 currentTurnUid = nextTurnUid;
                 lastDisplayedTurnUid = currentTurnUid;
@@ -1441,7 +1439,7 @@
                 showMessage("Connection error. Could not update game.", 3000);
             } finally {
                 // **FINAL FIX**: Release the lock *after* all processing and updating is complete.
-                isAwaitingTurnResult = false;
+                isProcessingShot = false;
             }
         }
 
@@ -1506,7 +1504,7 @@
             
             // **FINAL FIX**: Activate the lock before shooting.
             if (isOnlineGame) {
-                isAwaitingTurnResult = true;
+                isProcessingShot = true;
             }
             
             chipsPocketedInTurn = [];
@@ -1957,7 +1955,7 @@
             turnInProgress = false; 
             lastDisplayedTurnUid = null;
             // **FINAL FIX**: Reset the lock when returning to menu.
-            isAwaitingTurnResult = false;
+            isProcessingShot = false;
             
             playerTurn = true;
             
@@ -2493,9 +2491,9 @@
                 const gameData = doc.data();
                 if (!gameData) return;
                 
-                // **FINAL FIX**: The lock is checked here. If the local client is waiting for its own turn to resolve,
+                // **FINAL FIX**: The lock is checked here. If the local client is processing its own shot,
                 // it ignores all incoming updates to prevent state corruption.
-                if (isAwaitingTurnResult) {
+                if (isProcessingShot) {
                     return;
                 }
 
