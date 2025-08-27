@@ -607,6 +607,9 @@
         let isMyTurnOnline = false;
         let turnInProgress = false;
         let selectedOnlineGameType = 'poker';
+        // NEW: Real-time aiming variables
+        let lastAimUpdateTime = 0;
+        const AIM_UPDATE_INTERVAL = 50; // ms, (20 updates per second)
 
         // --- Audio State ---
         let audioInitialized = false;
@@ -685,11 +688,11 @@
         }
 
         function update() {
-            if (isRotatingLeft) {
-                cueStick.angle -= ROTATION_SPEED;
-            }
-            if (isRotatingRight) {
-                cueStick.angle += ROTATION_SPEED;
+            // MODIFIED: Added check for online game to send real-time updates
+            if (isRotatingLeft || isRotatingRight) {
+                if (isRotatingLeft) cueStick.angle -= ROTATION_SPEED;
+                if (isRotatingRight) cueStick.angle += ROTATION_SPEED;
+                sendLiveAimData();
             }
 
             if (chipsMoving) {
@@ -704,7 +707,8 @@
             drawTable();
             drawChips();
 
-            if (gameState === 'aiming' || gameState === 'shooting_animation') {
+            // MODIFIED: Always draw cue stick if aiming, regardless of whose turn it is in an online game
+            if ((gameState === 'aiming' || gameState === 'shooting_animation') && cueStick.visible) {
                  drawCueStick();
             }
 
@@ -1182,7 +1186,6 @@
             canMoveCueBall = true;
             gameState = 'moving';
             
-            // BUG FIX: Ensure cue stick is visible at the start of a new game.
             cueStick.visible = true;
             
             showMessage("Place the cue ball for your break shot.", 3000);
@@ -2110,6 +2113,7 @@
                 canMoveCueBall = false;
                 gameState = 'aiming';
                 cueBallGuide.style.display = 'none';
+                sendLiveAimData(); // Send final position
             }
             isDraggingPektusDot = false;
             isRotatingLeft = false;
@@ -2140,6 +2144,7 @@
             const dx = cueChip.x - pos.x;
             const dy = cueChip.y - pos.y;
             cueStick.angle = Math.atan2(dy, dx);
+            sendLiveAimData(); // MODIFIED: Send update
         }
 
         function updateCueBallPosition(e) {
@@ -2155,6 +2160,7 @@
                 cueChip.x = Math.max(cueChip.radius, Math.min(table.width - cueChip.radius, pos.x));
                 cueChip.y = Math.max(cueChip.radius, Math.min(table.height - cueChip.radius, pos.y));
             }
+            sendLiveAimData(); // MODIFIED: Send update
         }
 
         function handlePektusInput(e) {
@@ -2180,6 +2186,7 @@
             pektusOffset.y = Math.min(0, dy / maxDist);
 
             updatePektusUI();
+            sendLiveAimData(); // MODIFIED: Send update
         }
 
         // =========================================================================
@@ -2240,6 +2247,8 @@
                 createDeck();
                 dealCards();
             }
+            
+            const cueChip = chips[0];
 
             const gameData = {
                 gameId: newGameId,
@@ -2252,6 +2261,14 @@
                 chips: chips.map(c => ({...c})),
                 currentTurnUid: localPlayerUid,
                 lastShot: null,
+                // NEW: Add liveAimData to the initial game document
+                liveAimData: {
+                    angle: 0,
+                    cueBallX: cueChip.x,
+                    cueBallY: cueChip.y,
+                    pektusX: 0,
+                    pektusY: 0
+                },
                 turnInProgress: false, 
                 canMoveCueBall: true,
                 isBreakShot: true,
@@ -2368,6 +2385,30 @@
             requestAnimationFrame(animateOpponentShot);
         }
 
+        // NEW: Function to send live aiming data, throttled to prevent too many writes
+        function sendLiveAimData() {
+            if (!isOnlineGame || !isMyTurnOnline || !gameId) return;
+
+            const now = Date.now();
+            if (now - lastAimUpdateTime < AIM_UPDATE_INTERVAL) return;
+            lastAimUpdateTime = now;
+
+            const cueChip = chips[0];
+            if (!cueChip) return;
+
+            const dataToSend = {
+                angle: cueStick.angle,
+                cueBallX: cueChip.x,
+                cueBallY: cueChip.y,
+                pektusX: pektusOffset.x,
+                pektusY: pektusOffset.y
+            };
+
+            const gameDocRef = doc(db, "games", gameId);
+            // Use updateDoc for efficiency, no need to handle errors that would disrupt the player
+            updateDoc(gameDocRef, { liveAimData: dataToSend }).catch(() => {});
+        }
+
         function listenToGameUpdates(gameId) {
             const gameDocRef = doc(db, "games", gameId);
             let lastShotTimestamp = 0;
@@ -2382,6 +2423,7 @@
                 const gameData = doc.data();
                 if (!gameData) return;
 
+                // Sync the shot first, as it's a major event
                 if (gameData.lastShot && gameData.lastShot.timestamp > lastShotTimestamp) {
                     if (gameData.lastShot.uid !== localPlayerUid) {
                         animateReceivedShot(gameData.lastShot);
@@ -2389,6 +2431,7 @@
                     lastShotTimestamp = gameData.lastShot.timestamp;
                 }
 
+                // Then sync the rest of the game state
                 syncGameState(gameData);
             });
         }
@@ -2419,6 +2462,27 @@
                 showMessage("Opponent connected! Game starting...");
             }
             
+            currentTurnUid = data.currentTurnUid;
+            isMyTurnOnline = (currentTurnUid === localPlayerUid);
+
+            // NEW: Real-time aiming sync
+            // Only apply opponent's aiming data if it's their turn and balls are not moving
+            if (!isMyTurnOnline && data.liveAimData && !data.turnInProgress) {
+                const cueChip = chips[0];
+                if (cueChip) {
+                    cueChip.x = data.liveAimData.cueBallX;
+                    cueChip.y = data.liveAimData.cueBallY;
+                }
+                cueStick.angle = data.liveAimData.angle;
+                // Only update pektus UI, not the actual offset used for shooting
+                const tempPektus = { x: data.liveAimData.pektusX, y: data.liveAimData.pektusY };
+                const controlSize = pektusControl.offsetWidth;
+                const dotSize = pektusDot.offsetWidth;
+                const maxOffset = (controlSize / 2) - (dotSize / 2);
+                pektusDot.style.left = `${(tempPektus.x * maxOffset) + (controlSize / 2)}px`;
+                pektusDot.style.top = `${(tempPektus.y * maxOffset) + (controlSize / 2)}px`;
+            }
+            
             turnInProgress = data.turnInProgress;
 
             if (!turnInProgress) {
@@ -2442,19 +2506,16 @@
                 updateCardDisplay();
                 updateInfoBox();
 
-                currentTurnUid = data.currentTurnUid;
-                isMyTurnOnline = (currentTurnUid === localPlayerUid);
                 canMoveCueBall = data.canMoveCueBall;
                 isBreakShot = data.isBreakShot;
                 
-                resetPektus();
+                if(!isMyTurnOnline) resetPektus();
 
                 if (canMoveCueBall && isMyTurnOnline) {
                     gameState = 'moving';
                     cueBallGuide.style.display = 'block';
                 } else {
                     gameState = 'aiming';
-                    // Make cue stick visible for whosever turn it is
                     cueStick.visible = true; 
                     cueBallGuide.style.display = 'none';
                 }
