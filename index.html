@@ -1407,13 +1407,16 @@
                     }
                 }
                 
-                // **FINAL FIX**: Update local state *before* sending to server to ensure consistency.
+                // **FINAL FIX**: Update local state immediately *before* sending to the server.
+                // This ensures the local client is already in the correct state and won't be
+                // confused by the server's echo of its own update.
                 isMyTurnOnline = (nextTurnUid === localPlayerUid);
                 currentTurnUid = nextTurnUid;
                 lastDisplayedTurnUid = currentTurnUid;
 
                 if (isMyTurnOnline) {
-                     showMessage("Your turn", 1500);
+                     if(!switchTurn) showMessage("You go again!", 1500);
+                     else showMessage("Your turn", 1500);
                 } else {
                      showMessage("Opponent's turn", 1500);
                 }
@@ -1437,7 +1440,7 @@
                 console.error("Error updating game state:", error);
                 showMessage("Connection error. Could not update game.", 3000);
             } finally {
-                // **FINAL FIX**: Release the lock *after* all processing is done.
+                // **FINAL FIX**: Release the lock *after* all processing and updating is complete.
                 isAwaitingTurnResult = false;
             }
         }
