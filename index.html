@@ -33,7 +33,7 @@
         }
         #game-canvas {
             background-color: #D2B48C;
-            border: 25px solid #8B4513; /* Increased border width for a wood frame */
+            border: 35px solid #aa7151; /* Increased border width for a wood frame */
             box-shadow: 
                 /* Outer shadow for the table */
                 0 10px 25px rgba(0,0,0,0.6), 
@@ -49,17 +49,6 @@
             max-width: 100%;
             max-height: 100%;
         }
-#ghost-hand {
-    display: none; /* Nakatago by default */
-    position: absolute; /* Para lumutang at masunod ang cursor */
-    width: 80px; /* Sukat ng kamay, pwede mong baguhin */
-    height: auto;
-    opacity: 0.7; /* Para magmukha siyang "ghost" (70% solid) */
-    z-index: 50; /* Para siguradong nasa ibabaw siya ng canvas */
-    pointer-events: none; /* SUPER IMPORTANTE: Para hindi niya harangan ang pag-click */
-    transform: translate(-25px, -15px); /* Ina-adjust ang pwesto para ang daliri ang nasa cursor */
-}
-
         
         /* UI Containers */
         #non-interactive-overlay {
@@ -89,9 +78,9 @@
             color: white;
             background-color: rgba(255, 256, 255, 0.2); 
             border: 1px solid rgba(255, 255, 255, 0.1);
-            padding: 4px 7px;
+            padding: 7px 7px;
             border-radius: 10px;
-            font-size: 0.8em;
+            font-size: 1em;
             font-weight: bold;
             text-shadow: 1px 1px 3px rgba(0,0,0,0.7);
         }
@@ -115,8 +104,8 @@
             left: 50%;
             transform: translateX(-50%);
             background-color: rgba(220, 53, 69, 0.5);
-            padding: 4px 16px;
-            font-size: 0.8em;
+            padding: 8px 16px;
+            font-size: 1.1em;
             z-index: 100;
             transition: background-color 0.2s;
         }
@@ -444,24 +433,17 @@
 
     </style>
 </head>
-    <body>
-        <div id="game-wrapper">
-            <canvas id="game-canvas"></canvas>
-            
-          <img id="ghost-hand" src="https://i.imgur.com/ZPG3GhI.png">
-
-
-
-            
-                    <div id="non-interactive-overlay">
+<body>
+    <div id="game-wrapper">
+        <canvas id="game-canvas"></canvas>
+        
+        <!-- Non-interactive elements that should not block canvas clicks -->
+        <div id="non-interactive-overlay">
             <div id="player-info" class="info-box">You: ?</div>
             <div id="opponent-info" class="info-box">Opponent: ?</div>
             <div id="message-box"></div>
             <div id="cue-ball-guide" class="guide-text"></div>
-
-            <div id="drag-guide-text" class="guide-text">Place the cue ball</div>
         </div>
-
         
         <!-- Interactive UI elements -->
         <button id="exit-button" class="ui-button">Exit</button>
@@ -706,15 +688,7 @@
         const leaderboardModal = document.getElementById('leaderboard-modal');
         const leaderboardButton = document.getElementById('leaderboard-button');
         const leaderboardBackButton = document.getElementById('leaderboard-back-button');
-                // ... (ibang mga const declarations tulad ng leaderboardBody)
         const leaderboardBody = document.getElementById('leaderboard-body');
-        
-                // ... (ibang mga const declarations tulad ng ghostHand)
-        const ghostHand = document.getElementById('ghost-hand');
-        
-        const dragGuideText = document.getElementById('drag-guide-text'); // IDAGDAG ITO
-
-
         
         // =========================================================================
         // CONSTANTS & GAME STATE
@@ -1024,8 +998,8 @@ let aiConsecutivePots = 0; // BAGONG DAGDAG: Para sa "killer instinct"
                 }
             } else if (gameMode.includes('61-ball')) {
                 const chipColors = [
-                    null, '#FFD700', '#0000FF', '#FF0000', '#800080', '#FFA500', 
-                    '#008000', '#964B00', '#212121', '#FFC107', '#03A9F4', '#F44336', 
+                    null, '#FFC107', '#03A9F4', '#F44336', '#9C27B0', '#FF9800', 
+                    '#4CAF50', '#795548', '#212121', '#FFC107', '#03A9F4', '#F44336', 
                     '#9C27B0', '#FF9800', '#4CAF50', '#795548'
                 ];
         
@@ -1218,36 +1192,36 @@ let aiConsecutivePots = 0; // BAGONG DAGDAG: Para sa "killer instinct"
 
 
         function drawCueStick() {
-            if (!cueStick.visible || !chips[0] || !chips[0].inPlay) return;
-            const cueChip = chips[0];
+    if (!cueStick.visible || !chips[0] || !chips[0].inPlay || (gameState !== 'aiming' && gameState !== 'shooting_animation')) {
+        cueStickElement.style.display = 'none';
+        return;
+    }
+    cueStickElement.style.display = 'block';
 
-            ctx.save();
-            ctx.translate(cueChip.x, cueChip.y);
-            ctx.rotate(cueStick.angle);
+    const cueChip = chips[0];
+    const canvasRect = canvas.getBoundingClientRect();
+    const wrapperRect = gameWrapper.getBoundingClientRect();
 
-            const stickOffset = 15 * scale;
-            const stickHeight = 200 * scale;
-            const stickDrawStart = -(cueChip.radius + stickOffset + cueStick.length) - cueStick.pullback;
+    const stickLength = 700 * scale;
+    const stickHeight = stickLength / 31.25;
 
-            if (cueStickImage.complete && cueStickImage.naturalHeight !== 0) {
-                ctx.drawImage(
-                    cueStickImage,
-                    stickDrawStart,
-                    -stickHeight / 2,
-                    cueStick.length,
-                    stickHeight
-                );
-            } else {
-                ctx.beginPath();
-                ctx.moveTo(stickDrawStart + cueStick.length, 0);
-                ctx.lineTo(stickDrawStart, 0);
-                ctx.strokeStyle = '#a0522d';
-                ctx.lineWidth = 5 * scale;
-                ctx.stroke();
-            }
+    cueStickElement.style.width = `${stickLength}px`;
+    cueStickElement.style.height = `${stickHeight}px`;
 
-            ctx.restore();
-        }
+    const cueBallAbsoluteX = (canvasRect.left - wrapperRect.left) + cueChip.x;
+    const cueBallAbsoluteY = (canvasRect.top - wrapperRect.top) + cueChip.y;
+
+    const stickOffset = 15 * scale;
+    const totalOffsetFromCenter = cueChip.radius + stickOffset + cueStick.pullback;
+
+    const buttX = cueBallAbsoluteX - Math.cos(cueStick.angle) * (stickLength + totalOffsetFromCenter);
+    const buttY = cueBallAbsoluteY - Math.sin(cueStick.angle) * (stickLength + totalOffsetFromCenter);
+
+    const angleDeg = cueStick.angle * (180 / Math.PI);
+
+    cueStickElement.style.transform = `translate(${buttX}px, ${buttY - (stickHeight / 2)}px) rotate(${angleDeg}deg)`;
+}
+
 
         function drawGuidelines() {
             if (gameState !== 'aiming' || chipsMoving) return;
@@ -1483,7 +1457,7 @@ let aiConsecutivePots = 0; // BAGONG DAGDAG: Para sa "killer instinct"
             chip.vy = 0;
         }
 
-                function startGame(mode, difficultyLevel = 'easy') {
+        function startGame(mode, difficultyLevel = 'easy') {
             resizeCanvas(); 
             
             const allModals = [gameModeSelect, aiMenu, difficultySelect, straightBallInstructions, pokerInstructions, sixtyOneInstructions, onlineGameSelect, onlineMenu, waitingRoom, winnerModal, confirmExitModal, pokerFoulCardPickModal, leaderboardModal];
@@ -1496,16 +1470,8 @@ let aiConsecutivePots = 0; // BAGONG DAGDAG: Para sa "killer instinct"
             setupChips();
             isBreakShot = true; canMoveCueBall = true; gameState = 'moving';
             cueStick.visible = true;
-            
-            if (playerTurn) {
-                showMessage("You break! Place the cue ball.", 3000);
-                // TAMANG LOGIC PARA SA SARGO
-                dragGuideText.style.display = 'block'; 
-            } else { 
-                showMessage("Opponent breaks!", 3000); 
-                placeCueChipForAI(); 
-            }
-
+            if (playerTurn) showMessage("You break! Place the cue ball.", 3000);
+            else { showMessage("Opponent breaks!", 3000); placeCueChipForAI(); }
             resetPektus();
             if (gameMode.includes('poker')) { createDeck(); dealCards(); updateCardDisplay(); } 
             else if (gameMode.includes('61-ball')) {
@@ -1515,7 +1481,6 @@ let aiConsecutivePots = 0; // BAGONG DAGDAG: Para sa "killer instinct"
             else cardHandContainer.style.display = 'none';
             updateInfoBox(); history.pushState({ modal: 'game' }, 'Game', '#game');
         }
-
 
         // =========================================================================
         // TURN LOGIC - DUAL MODE
@@ -1535,30 +1500,25 @@ let aiConsecutivePots = 0; // BAGONG DAGDAG: Para sa "killer instinct"
         // =========================================================================
         // 61 BALL TURN LOGIC
         // =========================================================================
-                                // =========================================================================
-        // 61 BALL TURN LOGIC
-        // =========================================================================
         async function handle61BallTurnEnd() {
             let foul = false;
             let switchTurn = true;
             const isMyTurn = isOnlineGame ? isMyTurnOnline : playerTurn;
             const pocketedObjectChips = chipsPocketedInTurn.filter(c => c.id !== 0);
-            const lowestChipOnTable = lowestChipNumber;
+        
+            const lowestChipOnTable = lowestChipNumber; // Use the stored value from the start of the turn.
+        
             const wasCueBallPocketed = chipsPocketedInTurn.some(c => c.id === 0);
             const didHitWrongBallFirst = !isBreakShot && firstChipHitInTurn && firstChipHitInTurn.id !== lowestChipOnTable;
             const didNotHitAnyBall = firstChipHitInTurn === null && chips.some(c => c.inPlay && c.id !== 0);
-
+        
             if (wasCueBallPocketed || didHitWrongBallFirst || didNotHitAnyBall) {
                 foul = true;
             }
-
+        
             if (foul) {
                 switchTurn = true;
                 canMoveCueBall = true;
-                const nextPlayerIsHuman = (!playerTurn && switchTurn) || (playerTurn && !switchTurn);
-                if (nextPlayerIsHuman) {
-                    dragGuideText.style.display = 'block';
-                }
                 if (wasCueBallPocketed) {
                     const cueChip = chips.find(c => c.id === 0);
                     if (cueChip) {
@@ -1567,6 +1527,8 @@ let aiConsecutivePots = 0; // BAGONG DAGDAG: Para sa "killer instinct"
                         cueChip.y = table.height / 2;
                     }
                 }
+                
+                // Return pocketed object chips to the table on any foul
                 if (pocketedObjectChips.length > 0) {
                     pocketedObjectChips.forEach(chip => {
                         const chipToReturn = chips.find(c => c.id === chip.id);
@@ -1576,29 +1538,40 @@ let aiConsecutivePots = 0; // BAGONG DAGDAG: Para sa "killer instinct"
                         }
                     });
                 }
+                
                 if (isMyTurn) showMessage("Foul! Chips returned.", 2500);
             } else {
+                // No foul, process points
                 if (pocketedObjectChips.length > 0) {
                     const pointsThisTurn = pocketedObjectChips.reduce((sum, chip) => sum + chip.value, 0);
-                    if (isMyTurn) player61Score += pointsThisTurn;
-                    else opponent61Score += pointsThisTurn;
-                    switchTurn = false;
+                    if (isMyTurn) {
+                        player61Score += pointsThisTurn;
+                    } else {
+                        opponent61Score += pointsThisTurn;
+                    }
+                    switchTurn = false; // Player continues their turn
                 } else {
-                    switchTurn = true;
+                    switchTurn = true; // No chips pocketed, switch turn
                 }
             }
-
+        
             const newRemainingChips = chips.filter(c => c.inPlay && c.id !== 0);
             lowestChipNumber = newRemainingChips.length > 0 ? Math.min(...newRemainingChips.map(c => c.id)) : 0;
+            
             const winner = checkWinCondition();
             if (winner) {
                 const winnerText = (winner === 'player') ? 'You Win!' : (winner === 'opponent' ? 'You Lose!' : "It's a Draw! 60-60");
                 await endGame(winnerText);
                 return;
             }
+        
             isBreakShot = false;
-            if (isOnlineGame) await updateOnlineGameState(switchTurn);
-            else updateLocalGameState(switchTurn);
+            
+            if (isOnlineGame) {
+                await updateOnlineGameState(switchTurn);
+            } else {
+                updateLocalGameState(switchTurn);
+            }
         }
 
         // =========================================================================
@@ -1637,15 +1610,25 @@ let aiConsecutivePots = 0; // BAGONG DAGDAG: Para sa "killer instinct"
             const pocketedObjectChips = chipsPocketedInTurn.filter(c => c.id !== 0);
             const wasCueBallPocketed = chipsPocketedInTurn.some(c => c.id === 0);
             const didHitNothing = firstChipHitInTurn === null && chips.some(c => c.inPlay && c.id !== 0);
-            const legallyPocketedOwnChips = pocketedObjectChips.filter(chip => currentHand.some(card => card.value === chip.id));
-            const illegallyPocketedChips = pocketedObjectChips.filter(chip => !currentHand.some(card => card.value === chip.id));
-            let switchTurn = true;
+
+            const legallyPocketedOwnChips = pocketedObjectChips.filter(chip =>
+                currentHand.some(card => card.value === chip.id)
+            );
+
+            // An illegal pot is any pocketed object chip that doesn't match the current player's hand.
+            const illegallyPocketedChips = pocketedObjectChips.filter(chip =>
+                !currentHand.some(card => card.value === chip.id)
+            );
+            
+            let switchTurn = true; // Assume turn will switch.
             let foul = wasCueBallPocketed || didHitNothing;
 
+            // Turn continues ONLY if a legal ball was pocketed AND no illegal balls were pocketed AND there was no foul.
             if (legallyPocketedOwnChips.length > 0 && illegallyPocketedChips.length === 0 && !foul) {
                 switchTurn = false;
             }
             
+            // Update hands for ALL players based on what was pocketed.
             if (pocketedObjectChips.length > 0) {
                 const pocketedIds = pocketedObjectChips.map(c => c.id);
                 playerHand = playerHand.filter(card => !pocketedIds.includes(card.value));
@@ -1654,10 +1637,6 @@ let aiConsecutivePots = 0; // BAGONG DAGDAG: Para sa "killer instinct"
 
             if (foul) {
                 canMoveCueBall = true;
-                const nextPlayerIsHuman = (!playerTurn && switchTurn) || (playerTurn && !switchTurn);
-                if (nextPlayerIsHuman) {
-                    dragGuideText.style.display = 'block';
-                }
                 if (wasCueBallPocketed) {
                     const cueChip = chips.find(c => c.id === 0);
                     if (cueChip) {
@@ -1666,6 +1645,7 @@ let aiConsecutivePots = 0; // BAGONG DAGDAG: Para sa "killer instinct"
                         cueChip.y = table.height / 2;
                     }
                     if(isMyTurn) showMessage("Foul! You scratched.", 3000);
+                    
                     let newCard = isMyTurn ? await waitForCardPick() : (deck.length > 0 ? deck.splice(Math.floor(Math.random() * deck.length), 1)[0] : null);
                     if (newCard) {
                         const cardName = `${newCard.rank}${newCard.suit}`;
@@ -1676,6 +1656,7 @@ let aiConsecutivePots = 0; // BAGONG DAGDAG: Para sa "killer instinct"
                             (isMyTurn ? playerHand : opponentHand).push(newCard);
                             if (isMyTurn) showMessage(`Foul! You picked ${cardName}.`, 3000);
                         }
+
                         if (playerHand.length === 1 && newCard.rank === 'K' && wasCueBallPocketed && legallyPocketedOwnChips.length > 0) {
                             await endGame('You Win on a Lucky Scratch!', playerHand, opponentHand);
                             return;
@@ -1690,10 +1671,16 @@ let aiConsecutivePots = 0; // BAGONG DAGDAG: Para sa "killer instinct"
                 await endGame(winnerText, playerHand, opponentHand);
                 return;
             }
+
             isBreakShot = false;
-            if (isOnlineGame) await updateOnlineGameState(switchTurn);
-            else updateLocalGameState(switchTurn);
+            
+            if (isOnlineGame) {
+                await updateOnlineGameState(switchTurn);
+            } else {
+                updateLocalGameState(switchTurn);
+            }
         }
+
 
         // =========================================================================
         // STRAIGHT BALL TURN LOGIC
@@ -1703,6 +1690,7 @@ let aiConsecutivePots = 0; // BAGONG DAGDAG: Para sa "killer instinct"
             const isMyTurn = isOnlineGame ? isMyTurnOnline : playerTurn;
             const pocketedObjectChips = chipsPocketedInTurn.filter(c => c.id !== 0);
             const currentPlayerColor = isMyTurn ? playerChipsType : opponentChipsType;
+            
             const wasCueBallPocketed = chipsPocketedInTurn.some(c => c.id === 0);
             const didHitWrongBallFirst = !isBreakShot && colorsAssigned && firstChipHitInTurn && firstChipHitInTurn.type !== currentPlayerColor;
             const didNotHitAnyBall = firstChipHitInTurn === null && chips.some(c => c.inPlay && c.id !== 0);
@@ -1724,8 +1712,10 @@ let aiConsecutivePots = 0; // BAGONG DAGDAG: Para sa "killer instinct"
                     colorsAssigned = true;
                     if (isMyTurn) showMessage(`Colors assigned! You are ${playerChipsType}.`, 3000);
                 }
+
                 const myPocketedCount = pocketedObjectChips.filter(c => c.type === (isMyTurn ? playerChipsType : opponentChipsType)).length;
                 const opponentPocketedCount = pocketedObjectChips.filter(c => c.type === (isMyTurn ? opponentChipsType : playerChipsType)).length;
+
                 if (!foul && myPocketedCount > 0 && opponentPocketedCount === 0) {
                     switchTurn = false;
                 }
@@ -1734,10 +1724,7 @@ let aiConsecutivePots = 0; // BAGONG DAGDAG: Para sa "killer instinct"
             if (foul) {
                 switchTurn = true;
                 canMoveCueBall = true;
-                const nextPlayerIsHuman = (!playerTurn && switchTurn) || (playerTurn && !switchTurn);
-                if (nextPlayerIsHuman) {
-                    dragGuideText.style.display = 'block';
-                }
+                
                 if (wasCueBallPocketed) {
                     foulReason += "Cue ball pocketed! ";
                     const cueChip = chips.find(c => c.id === 0);
@@ -1746,9 +1733,14 @@ let aiConsecutivePots = 0; // BAGONG DAGDAG: Para sa "killer instinct"
                         cueChip.x = table.width * 0.25;
                         cueChip.y = table.height / 2;
                     }
+
                     const foulingPlayerColor = isMyTurn ? playerChipsType : opponentChipsType;
                     if (foulingPlayerColor) {
-                        const chipToReturn = chips.find(c => c.type === foulingPlayerColor && !c.inPlay && !chipsPocketedInTurn.some(p => p.id === c.id));
+                        const chipToReturn = chips.find(c => 
+                            c.type === foulingPlayerColor && 
+                            !c.inPlay && 
+                            !chipsPocketedInTurn.some(p => p.id === c.id)
+                        );
                         if (chipToReturn) {
                             resetChipStateForReturn(chipToReturn);
                             placeChipOnSpot(chipToReturn);
@@ -1756,6 +1748,7 @@ let aiConsecutivePots = 0; // BAGONG DAGDAG: Para sa "killer instinct"
                         }
                     }
                 }
+
                 if (didHitWrongBallFirst) {
                     foulReason += "Hit opponent's ball first. ";
                     const myPocketedInFoul = pocketedObjectChips.filter(c => c.type === currentPlayerColor);
@@ -1770,20 +1763,30 @@ let aiConsecutivePots = 0; // BAGONG DAGDAG: Para sa "killer instinct"
                         });
                     }
                 }
-                if (didNotHitAnyBall) foulReason += "No object ball was hit. ";
+
+                if (didNotHitAnyBall) {
+                    foulReason += "No object ball was hit. ";
+                }
             }
             
-            if (foulReason && isMyTurn) showMessage("Foul! " + foulReason.trim(), 4000);
+            if (foulReason && isMyTurn) {
+                showMessage("Foul! " + foulReason.trim(), 4000);
+            }
+
             const winner = checkWinCondition();
             if (winner) {
                 await endGame((winner === 'player') ? 'You Win!' : 'You Lose!');
                 return;
             }
+            
             isBreakShot = false;
-            if (isOnlineGame) await updateOnlineGameState(switchTurn);
-            else updateLocalGameState(switchTurn);
+            
+            if (isOnlineGame) {
+                await updateOnlineGameState(switchTurn);
+            } else {
+                updateLocalGameState(switchTurn);
+            }
         }
-
 
 
         async function updateOnlineGameState(switchTurn) {
@@ -2338,7 +2341,7 @@ function placeCueChipForAI() {
     }, 700);
 }
 
-function animateAiAiming(targetAngle,finalPower){const startTime=performance.now();const startAngle=cueStick.angle;const DURATION_ALIGN=800;const DURATION_FEATHER=2500;const DURATION_PAUSE=0;const FEATHER_COUNT=1.5;const FEATHER_DISTANCE=60*scale;const TOTAL_DURATION=DURATION_ALIGN+DURATION_FEATHER+DURATION_PAUSE;function animate(currentTime){const elapsedTime=currentTime-startTime;if(elapsedTime<DURATION_ALIGN){const alignProgress=elapsedTime/DURATION_ALIGN;const easeOut=1-Math.pow(1-alignProgress,4);cueStick.angle=startAngle+(targetAngle-startAngle)*easeOut;cueStick.pullback=0;}else if(elapsedTime<DURATION_ALIGN+DURATION_FEATHER){cueStick.angle=targetAngle;const featherTime=elapsedTime-DURATION_ALIGN;const featherProgress=featherTime/DURATION_FEATHER;cueStick.pullback=Math.abs(Math.sin(featherProgress*Math.PI*(FEATHER_COUNT*2)))*FEATHER_DISTANCE;}else if(elapsedTime<TOTAL_DURATION){cueStick.angle=targetAngle;cueStick.pullback=0;}else{cueStick.angle=targetAngle;shoot(finalPower*40+5);return;}requestAnimationFrame(animate);}requestAnimationFrame(animate);}
+function animateAiAiming(targetAngle,finalPower){const startTime=performance.now();const startAngle=cueStick.angle;const DURATION_ALIGN=800;const DURATION_FEATHER=1500;const DURATION_PAUSE=400;const FEATHER_COUNT=2;const FEATHER_DISTANCE=60*scale;const TOTAL_DURATION=DURATION_ALIGN+DURATION_FEATHER+DURATION_PAUSE;function animate(currentTime){const elapsedTime=currentTime-startTime;if(elapsedTime<DURATION_ALIGN){const alignProgress=elapsedTime/DURATION_ALIGN;const easeOut=1-Math.pow(1-alignProgress,4);cueStick.angle=startAngle+(targetAngle-startAngle)*easeOut;cueStick.pullback=0;}else if(elapsedTime<DURATION_ALIGN+DURATION_FEATHER){cueStick.angle=targetAngle;const featherTime=elapsedTime-DURATION_ALIGN;const featherProgress=featherTime/DURATION_FEATHER;cueStick.pullback=Math.abs(Math.sin(featherProgress*Math.PI*(FEATHER_COUNT*2)))*FEATHER_DISTANCE;}else if(elapsedTime<TOTAL_DURATION){cueStick.angle=targetAngle;cueStick.pullback=0;}else{cueStick.angle=targetAngle;shoot(finalPower*40+5);return;}requestAnimationFrame(animate);}requestAnimationFrame(animate);}
 function placeChipOnSpot(chipToPlace){const spotX=table.width*(gameMode.includes('61-ball')?0.75:0.7);const spotY=table.height/2;let finalX=spotX,finalY=spotY,attempts=0;while(attempts<100){if(!chips.some(c=>c.inPlay&&c.id!==chipToPlace.id&&(finalX-c.x)**2+(finalY-c.y)**2<(c.radius+chipToPlace.radius)**2))break;const angle=attempts*0.5,radius=chipToPlace.radius*1.2*Math.sqrt(attempts+1);finalX=spotX+Math.cos(angle)*radius;finalY=spotY+Math.sin(angle)*radius;attempts++;}chipToPlace.x=finalX;chipToPlace.y=finalY;}
 
 
@@ -2430,80 +2433,9 @@ function placeChipOnSpot(chipToPlace){const spotX=table.width*(gameMode.includes
             window.addEventListener('mouseup', handlePointerUp); window.addEventListener('touchend', handlePointerUp);
             window.addEventListener('mousemove', handlePointerMove); window.addEventListener('touchmove', handlePointerMove, { passive: false });
         }
-                function handlePointerDown(e) {
-            e.preventDefault();
-            const isMyTurn = isOnlineGame ? isMyTurnOnline : playerTurn;
-            if (!isMyTurn || (isOnlineGame && isSyncing)) return;
-            const targetId = e.currentTarget.id;
-            if (gameState === 'moving' && canMoveCueBall && targetId === 'game-canvas') {
-                isDraggingCueBall = true;
-                cueStick.visible = false;
-                ghostHand.style.display = 'block'; // ITO ANG NAGPAPALITAW SA KAMAY
-                updateCueBallPosition(e);
-            } else if (gameState === 'aiming') {
-                if (targetId === 'game-canvas') {
-                    isAimingOnCanvas = true;
-                    updateAimFromCanvas(e);
-                } else if (targetId === 'power-control') isPoweringUp = true;
-                else if (targetId === 'pektus-control') {
-                    isDraggingPektusDot = true;
-                    handlePektusInput(e);
-                } else if (targetId === 'left-arrow') isRotatingLeft = true;
-                else if (targetId === 'right-arrow') isRotatingRight = true;
-            }
-        }
-
-                function handlePointerMove(e) {
-            if (isDraggingCueBall) {
-                e.preventDefault();
-                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-                
-                // Inililipat ang ghost hand sa eksaktong pwesto ng cursor/daliri
-                ghostHand.style.left = `${clientX}px`;
-                ghostHand.style.top = `${clientY}px`;
-                dragGuideText.style.display = `none`;
-                
-                updateCueBallPosition(e);
-            } else if (isPoweringUp) {
-                e.preventDefault();
-                updatePower(e);
-            } else if (isAimingOnCanvas) {
-                e.preventDefault();
-                updateAimFromCanvas(e);
-            } else if (isDraggingPektusDot) {
-                e.preventDefault();
-                handlePektusInput(e);
-            }
-        }
-
-                function handlePointerUp() {
-            if (isPoweringUp) {
-                isPoweringUp = false;
-                shoot(cueStick.power * 60 + 2);
-            }
-            isAimingOnCanvas = false;
-            if (isDraggingCueBall) {
-                isDraggingCueBall = false;
-                ghostHand.style.display = 'none'; // ITO ANG NAGPAPATAGO SA KAMAY
-                if (!isInvalidPlacement) {
-                    canMoveCueBall = false;
-                    gameState = 'aiming';
-                    cueStick.visible = true;
-                    cueBallGuide.style.display = 'none';
-                    if (isOnlineGame) {
-                        const chipsToSend = chips.map(c => ({...c, x: c.x / table.width, y: c.y / table.height }));
-                        updateDoc(doc(db, "games", gameId), { canMoveCueBall: false, chips: chipsToSend, liveAimData: null, currentTurnUid: localPlayerUid });
-                    }
-                } else {
-                    cueStick.visible = true;
-                }
-            }
-            isDraggingPektusDot = false;
-            isRotatingLeft = false;
-            isRotatingRight = false;
-        }
-
+        function handlePointerDown(e) { e.preventDefault(); const isMyTurn = isOnlineGame ? isMyTurnOnline : playerTurn; if (!isMyTurn || (isOnlineGame && isSyncing)) return; const targetId = e.currentTarget.id; if (gameState === 'moving' && canMoveCueBall && targetId === 'game-canvas') { isDraggingCueBall = true; cueStick.visible = false; updateCueBallPosition(e); } else if (gameState === 'aiming') { if (targetId === 'game-canvas') { isAimingOnCanvas = true; updateAimFromCanvas(e); } else if (targetId === 'power-control') isPoweringUp = true; else if (targetId === 'pektus-control') { isDraggingPektusDot = true; handlePektusInput(e); } else if (targetId === 'left-arrow') isRotatingLeft = true; else if (targetId === 'right-arrow') isRotatingRight = true; } }
+        function handlePointerMove(e) { if (isDraggingCueBall) { e.preventDefault(); updateCueBallPosition(e); } else if (isPoweringUp) { e.preventDefault(); updatePower(e); } else if (isAimingOnCanvas) { e.preventDefault(); updateAimFromCanvas(e); } else if (isDraggingPektusDot) { e.preventDefault(); handlePektusInput(e); } }
+        function handlePointerUp() { if (isPoweringUp) { isPoweringUp = false; shoot(cueStick.power * 60 + 2); } isAimingOnCanvas = false; if (isDraggingCueBall) { isDraggingCueBall = false; if (!isInvalidPlacement) { canMoveCueBall = false; gameState = 'aiming'; cueStick.visible = true; cueBallGuide.style.display = 'none'; if (isOnlineGame) { const chipsToSend = chips.map(c => ({...c, x: c.x/table.width, y: c.y/table.height })); updateDoc(doc(db, "games", gameId), { canMoveCueBall: false, chips: chipsToSend, liveAimData: null, currentTurnUid: localPlayerUid }); } } else cueStick.visible = true; } isDraggingPektusDot = false; isRotatingLeft = false; isRotatingRight = false; }
         function getEventPos(e, relativeTo) { const rect = relativeTo.getBoundingClientRect(); const clientX = e.touches ? e.touches[0].clientX : e.clientX; const clientY = e.touches ? e.touches[0].clientY : e.clientY; return { x: clientX - rect.left, y: clientY - rect.top }; }
         function updatePower(e) { const pos = getEventPos(e, powerControl); let p = pos.y / powerControl.clientHeight; cueStick.power = Math.max(0, Math.min(1, p)); powerBar.style.height = `${cueStick.power * 100}%`; cueStick.pullback = cueStick.power * (150 * scale); }
         function updateAimFromCanvas(e) { const cueChip = chips[0]; if (!cueChip || !cueChip.inPlay) return; const pos = getEventPos(e, canvas); cueStick.angle = Math.atan2(pos.y - cueChip.y, pos.x - cueChip.x); sendLiveAimData(); }
@@ -2870,11 +2802,9 @@ function placeChipOnSpot(chipToPlace){const spotX=table.width*(gameMode.includes
                     isBreakShot = data.isBreakShot;
                     
                     if (canMoveCueBall && isMyTurnOnline) {
-    gameState = 'moving';
-    cueStick.visible = true;
-    showMessage("Place the cue ball.", 2000);
-    dragGuideText.style.display = 'block'; 
-
+                        gameState = 'moving';
+                        cueStick.visible = true;
+                        showMessage("Place the cue ball.", 2000);
                     } else {
                         gameState = 'aiming';
                         cueStick.visible = true;
@@ -2953,3 +2883,4 @@ function placeChipOnSpot(chipToPlace){const spotX=table.width*(gameMode.includes
     </script>
 </body>
 </html>
+
