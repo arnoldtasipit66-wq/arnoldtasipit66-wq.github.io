@@ -2622,11 +2622,8 @@ function evaluateShot(cueChip, targetChip, hole, allLegalTargets, difficulty, is
     let firstContactTarget = isCombination ? allLegalTargets[0] : targetChip;
     if (!firstContactTarget) return null;
 
-    const cushionSize = 38 * scale;
-    const aiTargetHole = {
-        x: (hole.x < canvas.width / 2) ? cushionSize : canvas.width - cushionSize,
-        y: (hole.y < canvas.height / 2) ? cushionSize : canvas.height - cushionSize
-    };
+    const aiTargetHole = { x: hole.x, y: hole.y };
+
 
     let shotAngle;
     if (isCombination) {
@@ -2677,11 +2674,13 @@ function evaluateShot(cueChip, targetChip, hole, allLegalTargets, difficulty, is
     return { angle: shotAngle, power, score: totalScore, probability: Math.max(0, probability), target: targetChip, hole: hole, firstContactTarget: firstContactTarget, isCombination };
 }
 
+// ▼▼▼ ITO ANG FINAL VERSION NG IYONG aiTurn() FUNCTION ▼▼▼
 function aiTurn() {
     if (gameState !== 'aiming' || chipsMoving || !chips[0]?.inPlay) return;
     const cueChip = chips[0];
     let allLegalTargets = [], allPocketableChips = [];
     
+    // (Walang binago sa parteng ito, kinukuha pa rin ang mga legal na target)
     if (gameMode.includes('poker')) {
         allLegalTargets = chips.filter(c => c.inPlay && opponentHand.some(card => card.value === c.id));
         allPocketableChips = allLegalTargets;
@@ -2699,13 +2698,13 @@ function aiTurn() {
     let simplePots = [];
     let complexShots = [];
 
+    // (Walang binago dito, naghahanap pa rin ng mga posibleng tira)
     for (const target of allLegalTargets) {
         for (const hole of holes) {
             const evaluation = evaluateShot(cueChip, target, hole, allLegalTargets, difficulty, false);
             if (evaluation) simplePots.push(evaluation);
         }
     }
-
     if (gameMode.includes('61-ball')) {
         for (const target of allPocketableChips.filter(c => c.id !== allLegalTargets[0].id)) {
             for (const hole of holes) {
@@ -2716,9 +2715,26 @@ function aiTurn() {
     }
 
     const allPossibleShots = [...simplePots, ...complexShots];
-    if (allPossibleShots.length === 0) {
-        let bestShot = findBestDefensiveShot(cueChip, allLegalTargets);
+    
+    // === DITO NAGSIMULA ANG MALAKING PAGBABAGO ===
+    let bestShot;
+
+    if (allPossibleShots.length > 0) {
+        // Kung may direktang tira, piliin ang pinakamaganda
+        bestShot = allPossibleShots.reduce((best, current) => (current.score > best.score) ? current : best, { score: -Infinity });
+    
+    } else {
+        // Kung WALANG direktang tira, subukan maghanap ng KICK SHOT
+        showMessage("AI is calculating a kick shot...", 2000);
+        bestShot = findBestKickShot(cueChip, allLegalTargets);
+
         if (!bestShot) {
+            // Kung wala talagang kick shot, mag-safety play na lang
+            bestShot = findBestDefensiveShot(cueChip, allLegalTargets);
+        }
+
+        if (!bestShot) {
+            // Kung wala talagang magawa, ititira na lang nang mahina ang legal target
              const finalTarget = allLegalTargets[0] || allPocketableChips[0];
              if (finalTarget) {
                  bestShot = { angle: Math.atan2(finalTarget.y - cueChip.y, finalTarget.x - cueChip.x), power: 0.4, probability: 0.5 };
@@ -2726,47 +2742,79 @@ function aiTurn() {
                  setTimeout(handleTurnEnd, 500); return;
              }
         }
-        animateAiAiming(bestShot.angle, bestShot.power);
-        return;
     }
-
-    let bestShot;
-
-    if (difficulty === 'pro') {
-        bestShot = allPossibleShots.reduce((best, current) => (current.score > best.score) ? current : best, { score: -Infinity });
-    } else {
-        const HIGH_PROBABILITY_THRESHOLD = 0.80;
-        const decentSimplePots = simplePots.filter(p => p.probability >= HIGH_PROBABILITY_THRESHOLD);
-
-        if (decentSimplePots.length > 0) {
-            bestShot = decentSimplePots.reduce((best, current) => (current.score > best.score) ? current : best);
-        } else {
-            bestShot = allPossibleShots.reduce((best, current) => (current.score > best.score) ? current : best);
-        }
-    }
-
+    
+    // === DITO ANG BAGONG ERROR LOGIC MULA SA HAKBANG 1 ===
     let errorMargin = 0;
-    if (difficulty !== 'pro') {
-        const shotProbability = bestShot.probability || 1.0;
-        if (difficulty === 'hard') {
-            if (shotProbability < 0.75) {
-                let baseError = (1 - shotProbability) * 0.08;
-                const confidenceFactor = 1.0 - (aiConsecutivePots * 0.3);
-                errorMargin = baseError * Math.max(0, confidenceFactor);
-            }
-        } else if (difficulty === 'easy') {
-            if (shotProbability < 0.85) errorMargin = (1 - shotProbability) * 0.15;
+    const shotProbability = bestShot.probability || 1.0;
+
+    if (difficulty === 'hard') {
+        if (shotProbability < 0.8) { 
+            errorMargin = (1 - shotProbability) * 0.07;
+        }
+    } else if (difficulty === 'easy') {
+        if (shotProbability < 0.9) {
+            errorMargin = (1 - shotProbability) * 0.15;
         }
     }
+    // Kapag 'pro' ang difficulty, ang errorMargin ay mananatiling 0
 
     if (errorMargin > 0) {
         bestShot.angle += (Math.random() - 0.5) * (errorMargin * 2);
         bestShot.power *= 1 + (Math.random() - 0.5) * errorMargin;
     }
+    
     animateAiAiming(bestShot.angle, bestShot.power);
 }
 
-function findBestKickShot(cueChip, legalTargets){let bestKickShot={score:-Infinity};const cushions=[{type:'y',val:0},{type:'y',val:canvas.height},{type:'x',val:0},{type:'x',val:canvas.width}];for(const target of legalTargets){for(const cushion of cushions){let virtualCue=(cushion.type==='y')?{x:cueChip.x,y:cushion.val*2-cueChip.y}:{x:cushion.val*2-cueChip.x,y:cueChip.y};const kickAngle=Math.atan2(target.y-virtualCue.y,target.x-virtualCue.x);const impactPoint=(cushion.type==='y')?{y:cushion.val,x:cueChip.x+(cushion.val-cueChip.y)/Math.tan(kickAngle)}:{x:cushion.val,y:cueChip.y+(cushion.val-cueChip.x)*Math.tan(kickAngle)};const pathToCushionClear=!isPathObstructed(cueChip,impactPoint,[]);const pathFromCushionClear=!isPathObstructed(impactPoint,target,[]);if(pathToCushionClear&&pathFromCushionClear){const power=0.5+Math.random()*0.2;const finalShotAngle=Math.atan2(impactPoint.y-cueChip.y,impactPoint.x-cueChip.x);const score=1000-Math.abs(finalShotAngle-kickAngle);if(score>bestKickShot.score)bestKickShot={score,angle:finalShotAngle,power,probability:0.6};}}}return bestKickShot.score>-Infinity?bestKickShot:null;}
+
+
+/**
+ * BAGONG FUNCTION: Naghahanap ng pinakamagandang 1-rail kick shot.
+ * Gumagana ito sa pamamagitan ng pag-imagine ng isang "virtual" na cue ball sa kabilang banda.
+ */
+function findBestKickShot(cueChip, legalTargets) {
+    let bestKickShot = { score: -Infinity };
+    const cushions = [
+        { type: 'y', val: 0 }, // Top cushion
+        { type: 'y', val: canvas.height }, // Bottom cushion
+        { type: 'x', val: 0 }, // Left cushion
+        { type: 'x', val: canvas.width }  // Right cushion
+    ];
+
+    for (const target of legalTargets) {
+        for (const cushion of cushions) {
+            // 1. Gumawa ng "virtual" na cue ball sa kabilang banda (parang salamin)
+            let virtualCue = (cushion.type === 'y') 
+                ? { x: cueChip.x, y: cushion.val * 2 - cueChip.y } 
+                : { x: cushion.val * 2 - cueChip.x, y: cueChip.y };
+
+            // 2. Kalkulahin kung saan sa banda tatama
+            const angleToVirtual = Math.atan2(target.y - virtualCue.y, target.x - virtualCue.x);
+            const impactPoint = (cushion.type === 'y')
+                ? { y: cushion.val, x: cueChip.x + (cushion.val - cueChip.y) / Math.tan(angleToVirtual) }
+                : { x: cushion.val, y: cueChip.y + (cushion.val - cueChip.x) * Math.tan(angleToVirtual) };
+
+            // 3. Tiyakin na walang haharang sa parehong landas
+            const pathToCushionClear = !isPathObstructed(cueChip, impactPoint, [target.id]);
+            const pathFromCushionClear = !isPathObstructed(impactPoint, target, [cueChip.id]);
+
+            if (pathToCushionClear && pathFromCushionClear) {
+                // Kung malinis ang daan, ito ay isang posibleng tira
+                const finalShotAngle = Math.atan2(impactPoint.y - cueChip.y, impactPoint.x - cueChip.x);
+                const distance = Math.hypot(impactPoint.x - cueChip.x, impactPoint.y - cueChip.y) + Math.hypot(target.x - impactPoint.x, target.y - impactPoint.y);
+                const power = Math.min(1.0, (distance / canvas.width) * 1.5) + 0.3; // Mas malakas na tira para sa kick
+                const score = 500 - distance; // Mas gusto ang mas maikling kick shot
+
+                if (score > bestKickShot.score) {
+                    bestKickShot = { score, angle: finalShotAngle, power, probability: 0.7 }; // Itinatakda natin na 70% ang probability
+                }
+            }
+        }
+    }
+    return bestKickShot.score > -Infinity ? bestKickShot : null;
+}
+
 function predictSimpleCuePos(cueChip,targetChip,shotAngle,power){const distance=Math.hypot(targetChip.x-cueChip.x,targetChip.y-cueChip.y);const followDistance=(power*power)*(distance*0.4);return{id:0,x:targetChip.x+Math.cos(shotAngle)*followDistance,y:targetChip.y+Math.sin(shotAngle)*followDistance,radius:cueChip.radius};}
 function calculatePositionalScore(predictedCuePos,justPocketedId,allLegalTargets){let nextTargets=[];if(gameMode.includes('poker'))nextTargets=allLegalTargets.filter(t=>t.id!==justPocketedId);else if(gameMode.includes('61-ball')){const remaining=chips.filter(c=>c.inPlay&&c.id!==0&&c.id!==justPocketedId);if(remaining.length>0)nextTargets=[remaining.sort((a,b)=>a.id-b.id)[0]];}else nextTargets=allLegalTargets.filter(t=>t.id!==justPocketedId);if(nextTargets.length===0)return 800;const nextBestTarget=nextTargets.sort((a,b)=>Math.hypot(a.x-predictedCuePos.x,a.y-predictedCuePos.y)-Math.hypot(b.x-predictedCuePos.x,b.y-predictedCuePos.y))[0];let score=600-Math.hypot(nextBestTarget.x-predictedCuePos.x,nextBestTarget.y-predictedCuePos.y);if(isPathObstructed(predictedCuePos,nextBestTarget,[]))score-=400;let bestAngleScore=-200;for(const hole of holes){if(!isPathObstructed(nextBestTarget,hole,[predictedCuePos.id])){const angleToHole=Math.atan2(hole.y-nextBestTarget.y,hole.x-nextBestTarget.x);const shotLine=Math.atan2(nextBestTarget.y-predictedCuePos.y,nextBestTarget.x-predictedCuePos.x);const cutAngle=Math.abs(angleToHole-shotLine);const angleBonus=200*(1-cutAngle/(Math.PI/2));if(angleBonus>bestAngleScore)bestAngleScore=angleBonus;}}score+=bestAngleScore;return score;}
 function findBestDefensiveShot(cueChip,legalTargets){if(!legalTargets||legalTargets.length===0)return null;let bestSafety={score:-Infinity,angle:0,power:0};const primaryTarget=legalTargets[0];const opponentNextTarget=primaryTarget;for(let i=0;i < 32;i++){const angleOffset=(Math.random()-0.5)*(Math.PI/4);const shotAngle=Math.atan2(primaryTarget.y-cueChip.y,primaryTarget.x-cueChip.x)+angleOffset;const power=0.25+Math.random()*0.2;const predictedCuePos=predictSimpleCuePos(cueChip,primaryTarget,shotAngle,power);if(holes.some(h=>Math.hypot(h.x-predictedCuePos.x,h.y-predictedCuePos.y)<h.radius*1.2))continue;let safetyScore=0;safetyScore+=Math.hypot(predictedCuePos.x-opponentNextTarget.x,predictedCuePos.y-opponentNextTarget.y);const distToCushion=Math.min(predictedCuePos.x,canvas.width-predictedCuePos.x,predictedCuePos.y,canvas.height-predictedCuePos.y);if(distToCushion<cueChip.radius*3)safetyScore+=300;let blockingBallsCount=0;for(const chip of chips){if(chip.inPlay&&chip.id!==cueChip.id&&chip.id!==opponentNextTarget.id){const distToLine=Math.abs((opponentNextTarget.y-predictedCuePos.y)*chip.x-(opponentNextTarget.x-predictedCuePos.x)*chip.y+opponentNextTarget.x*predictedCuePos.y-opponentNextTarget.y*predictedCuePos.x)/Math.hypot(opponentNextTarget.y-predictedCuePos.y,opponentNextTarget.x-predictedCuePos.x);if(distToLine<chip.radius*2)blockingBallsCount++;}}safetyScore+=blockingBallsCount*400;if(safetyScore>bestSafety.score)bestSafety={score:safetyScore,angle:shotAngle,power:power,probability:0.9};}return bestSafety.score>-Infinity?bestSafety:null;}
@@ -3373,7 +3421,7 @@ function listenToGameUpdates(gameId) {
     });
 }
 
-// ▼▼▼ IPALIT MO ITO SA IYONG BUONG syncGameState FUNCTION ▼▼▼
+// ▼▼▼ PALITAN MO ANG IYONG BUONG syncGameState FUNCTION NITO ▼▼▼
 function syncGameState(data) {
     if (isSyncing || !data) return;
     isSyncing = true;
@@ -3409,10 +3457,20 @@ function syncGameState(data) {
                 radius: (remoteChip.id === 0 ? CUE_BALL_RADIUS : BALL_RADIUS) * scale
             }));
         }
+        
+        // Ito ang unang pag-sync ng game data pag nagsimula ang laro
         if (data.gameType === 'poker') {
             deck = data.deck || [];
             playerHand = (localPlayerId === 'player1') ? data.player1Hand : data.player2Hand;
             opponentHand = (localPlayerId === 'player1') ? data.player2Hand : data.player1Hand;
+        } else if (data.gameType === '61-ball') {
+            player61Score = (localPlayerId === 'player1') ? data.player1_61Score : data.player2_61Score;
+            opponent61Score = (localPlayerId === 'player1') ? data.player2_61Score : data.player1_61Score;
+            lowestChipNumber = data.lowestChipNumber;
+        } else if (data.gameType === 'straight-ball') {
+            colorsAssigned = data.colorsAssigned;
+            playerChipsType = (localPlayerId === 'player1') ? data.player1ChipsType : data.player2ChipsType;
+            opponentChipsType = (localPlayerId === 'player1') ? data.player2ChipsType : data.player1ChipsType;
         }
     }
 
@@ -3462,8 +3520,24 @@ function syncGameState(data) {
                 }));
             }
             
+            // DITO NA ANG TAMANG LUGAR PARA I-UPDATE ANG LAHAT NG GAME DATA
+            if (data.gameType === 'poker') {
+                playerHand = (localPlayerId === 'player1') ? data.player1Hand : data.player2Hand;
+                opponentHand = (localPlayerId === 'player1') ? data.player2Hand : data.player1Hand;
+            } else if (data.gameType === '61-ball') {
+                player61Score = (localPlayerId === 'player1') ? data.player1_61Score : data.player2_61Score;
+                opponent61Score = (localPlayerId === 'player1') ? data.player2_61Score : data.player1_61Score;
+                lowestChipNumber = data.lowestChipNumber;
+            } else if (data.gameType === 'straight-ball') {
+                colorsAssigned = data.colorsAssigned;
+                playerChipsType = (localPlayerId === 'player1') ? data.player1ChipsType : data.player2ChipsType;
+                opponentChipsType = (localPlayerId === 'player1') ? data.player2ChipsType : data.player1ChipsType;
+            }
+            
             canMoveCueBall = data.canMoveCueBall;
             isBreakShot = data.isBreakShot;
+
+            // Inilipat natin ito DITO para laging updated ang display
             updateCardDisplay();
             updateInfoBox();
             
@@ -3473,15 +3547,10 @@ function syncGameState(data) {
 
         if (isMyTurnOnline) {
             gameState = canMoveCueBall ? 'moving' : 'aiming';
-
-            // ================== SIMULA NG BAGONG AYOS ==================
-            // Kung turn mo na para mag-aim, siguraduhing nakikita ang tako mo.
             if (gameState === 'aiming') {
                 cueStick.visible = true;
                 if (cueStickElement) cueStickElement.style.display = 'block';
             }
-            // =================== DULO NG BAGONG AYOS ===================
-
             if (canMoveCueBall && !isDraggingCueBall) {
                 dragGuideText.style.display = 'block';
             } else {
@@ -3501,9 +3570,6 @@ function syncGameState(data) {
     }
     isSyncing = false;
 }
-
-
-
 
 
 function updateCardDisplay() {
