@@ -786,14 +786,14 @@
         </div>
     </div>
 
-           <audio id="bg-music-1" src="assets/music_chill_1.mp3" loop></audio>
+    <audio id="bg-music-1" src="assets/music_chill_1.mp3" loop></audio>
     <audio id="bg-music-2" src="assets/music_chill_2.mp3" loop></audio>
 
     <script type="module">
         // Dito nakalagay ang iyong JavaScript code...
     </script>
 </body>
- 
+
 
     <script type="module">
         // =========================================================================
@@ -815,6 +815,15 @@ let isAuthReady = false;
 // =========================================================================
 // DOM ELEMENTS
 // =========================================================================
+// ... sa taas kasama ng ibang DOM Elements
+const musicPlayer1 = document.getElementById('bg-music-1');
+const musicPlayer2 = document.getElementById('bg-music-2');
+
+// ... sa taas kasama ng ibang Game State Variables
+const backgroundPlaylist = [musicPlayer1, musicPlayer2];
+let currentTrackIndex = Math.floor(Math.random() * backgroundPlaylist.length); // Random na kanta ang unang tutugtog
+let musicHasStarted = false;
+
 const canvas = document.getElementById('game-canvas');
 const ctx = canvas.getContext('2d');
 const gameWrapper = document.getElementById('game-wrapper');
@@ -1767,6 +1776,8 @@ function resetChipStateForReturn(chip) {
 }
 
 function startGame(mode, difficultyLevel = 'easy') {
+    playBackgroundMusic(); // <--- IDAGDAG MO ITONG ISANG LINYA
+    
     resizeCanvas(); 
     
     const allModals = [gameModeSelect, aiMenu, difficultySelect, straightBallInstructions, pokerInstructions, sixtyOneInstructions, onlineGameSelect, onlineMenu, waitingRoom, winnerModal, confirmExitModal, pokerFoulCardPickModal, leaderboardModal];
