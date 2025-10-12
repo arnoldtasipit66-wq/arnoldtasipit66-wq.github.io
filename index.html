@@ -798,8 +798,9 @@
         </div>
     </div>
 
-    <audio id="bg-music-1" src="assets/music_chill_1.mp3" loop></audio>
-    <audio id="bg-music-2" src="assets/music_chill_2.mp3" loop></audio>
+    <audio id="bg-music-1" src="assets/music_chill_1.mp3"></audio>
+<audio id="bg-music-2" src="assets/music_chill_2.mp3"></audio>
+
 
   
 
@@ -3817,23 +3818,21 @@ function updateVoiceButtonIcon() {
 
 // =================== HANGGANG DITO ===================
 
-// ▼▼▼ PALITAN MO ANG IYONG BUONG playBackgroundMusic FUNCTION NITO ▼▼▼
-
+// ▼▼▼ ITO ANG IPAPALIT MONG BAGONG FUNCTION ▼▼▼
 function playBackgroundMusic() {
     if (musicHasStarted) return; 
 
-    // Isang function na magpapatugtog sa susunod na kanta
     const playNextTrack = () => {
-        // Lilipat sa susunod na kanta sa playlist (at babalik sa simula kung nasa dulo na)
+        // Ito ang lilipat sa susunod na kanta sa playlist
         currentTrackIndex = (currentTrackIndex + 1) % backgroundPlaylist.length; 
         const nextPlayer = backgroundPlaylist[currentTrackIndex];
         nextPlayer.play();
     };
 
-    // Itatakda natin ang volume at ang "onended" event para sa LAHAT ng kanta
+    // Itatakda natin ang volume at ang utos para sa LAHAT ng kanta
     backgroundPlaylist.forEach(player => {
         player.volume = 0.25; // Hinaan ang volume
-        player.onended = playNextTrack; // Kapag natapos ang kanta, tawagin ang playNextTrack
+        player.onended = playNextTrack; // Kapag natapos ang kanta, patugtugin ang susunod
     });
 
     // Simulan ang pagtugtog sa unang (random) na kanta
