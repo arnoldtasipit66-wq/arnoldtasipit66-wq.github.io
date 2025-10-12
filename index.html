@@ -3787,9 +3787,30 @@ function updateVoiceButtonIcon() {
 
 // =================== HANGGANG DITO ===================
 
+// DITO MO IPAPASTE ANG BAGONG FUNCTION
+function playBackgroundMusic() {
+    if (musicHasStarted) return; 
+
+    backgroundPlaylist.forEach(player => player.volume = 0.25); 
+
+    const currentPlayer = backgroundPlaylist[currentTrackIndex];
+    
+    currentPlayer.play().catch(error => {
+        console.log("Music play was prevented by the browser. User must click something first.");
+    });
+
+    currentPlayer.onended = () => {
+        currentTrackIndex = (currentTrackIndex + 1) % backgroundPlaylist.length;
+        const nextPlayer = backgroundPlaylist[currentTrackIndex];
+        nextPlayer.play();
+    };
+
+    musicHasStarted = true;
+}
+
 
 init();
 
-    </script>
+</script>
 </body>
 </html>
