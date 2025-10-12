@@ -1095,8 +1095,10 @@ function initAudio() {
         chipCollisionSynth.volume.value = -4;
         cueHitSynth = new Tone.PluckSynth({ attackNoise: 1, dampening: 2000, resonance: 0.5, }).toDestination();
         cueHitSynth.volume.value = -1;
-        cushionSynth = new Tone.MembraneSynth({ pitchDecay: 0.08, octaves: 2, envelope: { attack: 0.001, decay: 0.1, sustain: 0 } }).toDestination();
-        cushionSynth.volume.value = -8;
+        // Palitan ang luma mong cushionSynth
+cushionSynth = new Tone.MembraneSynth({ pitchDecay: 0.01, octaves: 4, envelope: { attack: 0.001, decay: 0.2, sustain: 0 } }).toDestination();
+cushionSynth.volume.value = -10; // Medyo hininaan para 'di masakit sa tenga
+
         pocketSynth = new Tone.NoiseSynth({ noise: { type: 'brown' }, envelope: { attack: 0.005, decay: 0.15, sustain: 0.1 } }).toDestination();
         pocketSynth.volume.value = -5;
         uiSynth = new Tone.PluckSynth({ attackNoise: 0.5, dampening: 4000, resonance: 0.8 }).toDestination();
@@ -1422,7 +1424,7 @@ function drawTable() {
     }
 }
 
-// vvvv PALITAN MO ANG BUONG FUNCTION NITO vvvv
+// ▼▼▼ ITO ANG CODE PARA SA FLAT "PICHAY" DESIGN ▼▼▼
 
 function drawChips() {
     ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
@@ -1441,15 +1443,12 @@ function drawChips() {
             ctx.translate(chip.x, chip.y);
             
             if (chip.id === 0) { 
-                // --- Pagguhit ng Tira (Cue Chip) ---
-                // 1. Gumuhit ng solid na itim na base
+                // --- Pagguhit ng Cue Ball (Walang binago dito) ---
                 ctx.beginPath();
                 ctx.arc(0, 0, displayRadius, 0, Math.PI * 2);
-                ctx.fillStyle = '#FFD700'; // Halos itim
+                ctx.fillStyle = '#FFD700';
                 ctx.fill();
-
-                // 2. Magdagdag ng mga concentric rings para sa detalye
-                ctx.strokeStyle = '#444444'; // Dark gray na guhit
+                ctx.strokeStyle = '#444444';
                 ctx.lineWidth = 2 * scale;
                 ctx.beginPath();
                 ctx.arc(0, 0, displayRadius * 0.8, 0, Math.PI * 2);
@@ -1457,20 +1456,19 @@ function drawChips() {
                 ctx.beginPath();
                 ctx.arc(0, 0, displayRadius * 0.5, 0, Math.PI * 2);
                 ctx.stroke();
-                
-                // 3. Maglagay ng puting tuldok sa gitna
                 ctx.beginPath();
                 ctx.arc(0, 0, displayRadius * 0.2, 0, Math.PI * 2);
                 ctx.fillStyle = '#000000';
                 ctx.fill();
 
             } else { 
-                // --- Pagguhit ng mga Panots (Object Chips) ---
-                // 1. Gumuhit ng transparent na acrylic base
+                // --- Pagguhit ng mga Pichay (Object Chips) - FLAT STYLE ---
+                
+                // 1. Gumuhit ng gold/yellow na acrylic base
                 ctx.beginPath();
                 ctx.arc(0, 0, displayRadius, 0, Math.PI * 2);
-                ctx.fillStyle = '#FFD700'; // Kulay ng acrylic
-                ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';   // Manipis na gilid para makita
+                ctx.fillStyle = '#FFD700'; // Kulay ng acrylic base
+                ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)'; // Manipis na gilid
                 ctx.lineWidth = 1 * scale;
                 ctx.fill();
                 ctx.stroke();
@@ -1479,16 +1477,16 @@ function drawChips() {
                 const innerRadius = displayRadius * 0.85;
                 ctx.beginPath();
                 ctx.arc(0, 0, innerRadius, 0, Math.PI * 2);
-                ctx.fillStyle = chip.color; // Pula o asul
+                ctx.fillStyle = chip.color; // Pula, asul, o iba pang kulay
                 ctx.fill();
                 
                 // 3. Isulat ang numero
                 if(chip.id) {
+                    // Ibinalik natin ang dati mong text style
                     ctx.fillStyle = 'white';
                     ctx.font = `bold ${innerRadius * 1.7}px Arial, sans-serif`;
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
-                    // Alisin muna natin ang shadow ng text para mas flat tingnan
                     ctx.shadowColor = 'rgba(0,0,0,0.5)';
                     ctx.shadowBlur = 2 * scale;
                     ctx.shadowOffsetX = 1 * scale;
@@ -1503,8 +1501,6 @@ function drawChips() {
 
     ctx.shadowColor = 'transparent';
 }
-// ^^^^ HANGGANG DITO ^^^^
-
 
                 function drawCueStick() {
     if (!cueStick.visible || !chips[0] || !chips[0].inPlay || !cueStickElement) return;
@@ -1776,12 +1772,13 @@ function startGame(mode, difficultyLevel = 'easy') {
     cueStick.visible = true;
     
     if (playerTurn) {
-        showMessage("You break! Place the cue ball.", 3000);
-        dragGuideText.style.display = 'block'; 
-    } else { 
-        showMessage("Opponent breaks!", 3000); 
-        placeCueChipForAI(); 
-    }
+    showMessage("It's your turn to break!", 4000); // Mas mahaba at klaro
+    dragGuideText.style.display = 'block'; 
+} else { 
+    showMessage("Opponent will break the balls.", 4000); // Mas mahaba at klaro
+    placeCueChipForAI(); 
+}
+
 
     resetPektus();
     if (gameMode.includes('poker')) { createDeck(); dealCards(); updateCardDisplay(); } 
@@ -2823,46 +2820,49 @@ function placeCueChipForAI() {
     cueBallGuide.style.display = 'none';
     const cueChip = chips[0];
     gameState = 'ai_placing';
-    const breakLineX = canvas.width * 0.25;
-    let bestPlacement = { score: -Infinity, x: 0, y: 0 };
 
-    for (let i = 0; i < 40; i++) {
-        // === ITO ANG INAYOS NA BAHAGI ===
-        // Nagdagdag tayo ng espasyo para hindi idikit ng AI ang bola sa banda
-
-        // 1. Itinatakda natin ang "safe zone" para sa paglalagyan ng bola.
-        const safeMargin = cueChip.radius + (5 * scale); // Espasyo mula sa kaliwang banda
-        const placementWidth = breakLineX - safeMargin - cueChip.radius; // Ang lawak ng area kung saan pwedeng ilapag
-
-        // 2. Kinakalkula ang bagong pwesto sa loob lang ng "safe zone".
-        const proposedX = (Math.random() * placementWidth) + safeMargin;
-        const proposedY = (Math.random() * (canvas.height - safeMargin * 2)) + safeMargin;
+    // *** BAGONG LOGIC: Tinitingnan kung break shot ba ***
+    if (isBreakShot) {
+        // Para sa break shot, pumipili lang ang AI sa dalawang pwesto
+        const breakLineX = canvas.width * 0.25;
+        const offsetFromCenter = canvas.height * 0.1; // Gaano kalayo sa gitna
+        const headsOrTails = Math.random();
         
-        // === DITO NAGTATAPOS ANG PAG-AYOS ===
-        
-        if (isPositionOccupied(proposedX, proposedY, cueChip)) continue;
+        cueChip.x = breakLineX;
+        cueChip.y = (headsOrTails < 0.5) 
+            ? (canvas.height / 2) + offsetFromCenter 
+            : (canvas.height / 2) - offsetFromCenter;
 
-        const tempCueChip = { ...cueChip, x: proposedX, y: proposedY };
-        let legalTargets = chips.filter(c => c.inPlay && c.id !== 0);
-        let bestScoreFromPos = -Infinity;
-
-        for (const target of legalTargets) {
-            for (const hole of holes) {
-                const evalShot = evaluateShot(tempCueChip, target, hole, legalTargets, 'hard');
-                if (evalShot && evalShot.score > bestScoreFromPos) bestScoreFromPos = evalShot.score;
+    } else {
+        // Ito yung luma mong logic para sa normal na ball-in-hand
+        const breakLineX = canvas.width * 0.25;
+        let bestPlacement = { score: -Infinity, x: 0, y: 0 };
+        for (let i = 0; i < 40; i++) {
+            const safeMargin = cueChip.radius + (5 * scale);
+            const placementWidth = canvas.width - (safeMargin * 2);
+            const proposedX = (Math.random() * placementWidth) + safeMargin;
+            const proposedY = (Math.random() * (canvas.height - safeMargin * 2)) + safeMargin;
+            if (isPositionOccupied(proposedX, proposedY, cueChip)) continue;
+            const tempCueChip = { ...cueChip, x: proposedX, y: proposedY };
+            let legalTargets = chips.filter(c => c.inPlay && c.id !== 0);
+            let bestScoreFromPos = -Infinity;
+            for (const target of legalTargets) {
+                for (const hole of holes) {
+                    const evalShot = evaluateShot(tempCueChip, target, hole, legalTargets, 'hard');
+                    if (evalShot && evalShot.score > bestScoreFromPos) bestScoreFromPos = evalShot.score;
+                }
+            }
+            if (bestScoreFromPos > bestPlacement.score) {
+                bestPlacement = { score: bestScoreFromPos, x: proposedX, y: proposedY };
             }
         }
-        if (bestScoreFromPos > bestPlacement.score) {
-            bestPlacement = { score: bestScoreFromPos, x: proposedX, y: proposedY };
+        if (bestPlacement.score > -Infinity) {
+            cueChip.x = bestPlacement.x;
+            cueChip.y = bestPlacement.y;
+        } else {
+            cueChip.x = canvas.width * 0.25;
+            cueChip.y = canvas.height / 2;
         }
-    }
-
-    if (bestPlacement.score > -Infinity) {
-        cueChip.x = bestPlacement.x;
-        cueChip.y = bestPlacement.y;
-    } else {
-        cueChip.x = canvas.width * 0.25;
-        cueChip.y = canvas.height / 2;
     }
     
     setTimeout(() => {
@@ -2873,6 +2873,7 @@ function placeCueChipForAI() {
         setTimeout(aiTurn, 500);
     }, 700);
 }
+
 
 function animateAiAiming(targetAngle,finalPower){const startTime=performance.now();const startAngle=cueStick.angle;const DURATION_ALIGN=800;const DURATION_FEATHER=2500;const DURATION_PAUSE=0;const FEATHER_COUNT=1.5;const FEATHER_DISTANCE=60*scale;const TOTAL_DURATION=DURATION_ALIGN+DURATION_FEATHER+DURATION_PAUSE;function animate(currentTime){const elapsedTime=currentTime-startTime;if(elapsedTime<DURATION_ALIGN){const alignProgress=elapsedTime/DURATION_ALIGN;const easeOut=1-Math.pow(1-alignProgress,4);cueStick.angle=startAngle+(targetAngle-startAngle)*easeOut;cueStick.pullback=0;}else if(elapsedTime<DURATION_ALIGN+DURATION_FEATHER){cueStick.angle=targetAngle;const featherTime=elapsedTime-DURATION_ALIGN;const featherProgress=featherTime/DURATION_FEATHER;cueStick.pullback=Math.abs(Math.sin(featherProgress*Math.PI*(FEATHER_COUNT*2)))*FEATHER_DISTANCE;}else if(elapsedTime<TOTAL_DURATION){cueStick.angle=targetAngle;cueStick.pullback=0;}else{cueStick.angle=targetAngle;shoot(finalPower*40+2);return;}requestAnimationFrame(animate);}requestAnimationFrame(animate);}
 function placeChipOnSpot(chipToPlace){
@@ -3407,10 +3408,13 @@ function listenToGameUpdates(gameId) {
 
                 const rematchButton = document.getElementById('rematch-button');
 
-                if (iWantRematch && opponentWantsRematch) {
-                    if (localPlayerId === 'player2') {
-                        resetOnlineGameForRematch(gameData);
-                    }
+                // Ito ang ipapalit mo:
+if (iWantRematch && opponentWantsRematch) {
+    // Ngayon, si Player 1 na ang laging nagre-reset ng game.
+    if (localPlayerId === 'player1') { 
+        resetOnlineGameForRematch(gameData);
+    }
+
                 } else if (opponentWantsRematch && !iWantRematch) {
                     rematchButton.textContent = 'Accept Rematch';
                 }
@@ -3421,7 +3425,7 @@ function listenToGameUpdates(gameId) {
     });
 }
 
-// ▼▼▼ PALITAN MO ANG IYONG BUONG syncGameState FUNCTION NITO ▼▼▼
+// ▼▼▼ IPALIT MO ANG IYONG BUONG syncGameState FUNCTION NITO ▼▼▼
 function syncGameState(data) {
     if (isSyncing || !data) return;
     isSyncing = true;
@@ -3458,7 +3462,6 @@ function syncGameState(data) {
             }));
         }
         
-        // Ito ang unang pag-sync ng game data pag nagsimula ang laro
         if (data.gameType === 'poker') {
             deck = data.deck || [];
             playerHand = (localPlayerId === 'player1') ? data.player1Hand : data.player2Hand;
@@ -3520,7 +3523,6 @@ function syncGameState(data) {
                 }));
             }
             
-            // DITO NA ANG TAMANG LUGAR PARA I-UPDATE ANG LAHAT NG GAME DATA
             if (data.gameType === 'poker') {
                 playerHand = (localPlayerId === 'player1') ? data.player1Hand : data.player2Hand;
                 opponentHand = (localPlayerId === 'player1') ? data.player2Hand : data.player1Hand;
@@ -3536,13 +3538,18 @@ function syncGameState(data) {
             
             canMoveCueBall = data.canMoveCueBall;
             isBreakShot = data.isBreakShot;
-
-            // Inilipat natin ito DITO para laging updated ang display
             updateCardDisplay();
             updateInfoBox();
             
             const message = data.isBreakShot ? (isMyTurnOnline ? "You break!" : "Opponent's break!") : (isMyTurnOnline ? "Your turn" : "Opponent's turn");
-            if (!canMoveCueBall) showMessage(message, 2000);
+            
+            // DITO NATIN IDINAGDAG ANG PAGPAPAKITA NG TEXT
+            if (isMyTurnOnline && canMoveCueBall) {
+                showMessage(message, 3000);
+                dragGuideText.style.display = 'block';
+            } else if (!canMoveCueBall) {
+                 showMessage(message, 2000);
+            }
         }
 
         if (isMyTurnOnline) {
@@ -3551,14 +3558,9 @@ function syncGameState(data) {
                 cueStick.visible = true;
                 if (cueStickElement) cueStickElement.style.display = 'block';
             }
-            if (canMoveCueBall && !isDraggingCueBall) {
-                dragGuideText.style.display = 'block';
-            } else {
-                dragGuideText.style.display = 'none';
-            }
         } else {
             gameState = 'aiming';
-            dragGuideText.style.display = 'none';
+            dragGuideText.style.display = 'none'; // Siguraduhing nakatago kung hindi mo turn
         }
 
         if (isAiTakeoverActive && !isMyTurnOnline && !chipsMoving && !data.turnInProgress) {
@@ -3570,6 +3572,7 @@ function syncGameState(data) {
     }
     isSyncing = false;
 }
+
 
 
 function updateCardDisplay() {
