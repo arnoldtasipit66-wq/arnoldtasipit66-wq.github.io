@@ -1,8 +1,6 @@
 name: Build Android APK
 
-on:
-  push:
-    branches: [ main ]
+on: [push]
 
 jobs:
   build:
@@ -11,37 +9,55 @@ jobs:
     steps:
     - uses: actions/checkout@v3
 
-    - name: Setup Java
+    # 1. Setup Java 11 (Standard for Android builds)
+    - name: Set up JDK 11
       uses: actions/setup-java@v3
       with:
-        distribution: 'temurin'
         java-version: '11'
+        distribution: 'temurin'
 
-    - name: Setup Node.js
+    # 2. Setup Node.js
+    - name: Setup Node
       uses: actions/setup-node@v3
       with:
         node-version: '16'
 
+    # 3. Install Cordova
     - name: Install Cordova
       run: npm install -g cordova
 
-    - name: Prepare Project
-      run: |
-        cordova create pinoypool com.dugzhak.pinoypool PinoyPool
-        rm -rf pinoypool/www/*
-        rm pinoypool/config.xml
-        cp index.html pinoypool/www/
-        cp config.xml pinoypool/
-        if [ -d "assets" ]; then cp -r assets pinoypool/www/; fi
+    # 4. Setup Android SDK (Ito ang gamot sa License Error)
+    - name: Setup Android SDK
+      uses: android-actions/setup-android@v2
 
+    # 5. Ayusin ang Project Files
+    - name: Create Project
+      run: |
+        # Gumawa ng bagong folder na 'app'
+        cordova create app com.dugzhak.pinoypool PinoyPool
+        
+        # Kopyahin ang game files
+        cp index.html app/www/
+        cp config.xml app/
+        
+        # (Safety net: Kopyahin ang assets KUNG MERON, wag mag-error kung wala)
+        if [ -d "assets" ]; then cp -r assets app/www/; fi
+
+    # 6. Add Android Platform (Version 10.1.2 - Pinaka stable)
+    - name: Add Platform
+      run: |
+        cd app
+        cordova platform add android@10.1.2
+
+    # 7. Build the APK!
     - name: Build APK
       run: |
-        cd pinoypool
-        cordova platform add android@10.1.2
-        cordova build android --release --no-telemetry
-        
+        cd app
+        cordova build android --release -- --packageType=apk
+
+    # 8. Upload para ma-download mo
     - name: Upload APK
       uses: actions/upload-artifact@v3
       with:
         name: PinoyPool-APK
-        path: pinoypool/platforms/android/app/build/outputs/apk/release/app-release-unsigned.apk
+        path: app/platforms/android/app/build/outputs/apk/release/app-release-unsigned.apk
