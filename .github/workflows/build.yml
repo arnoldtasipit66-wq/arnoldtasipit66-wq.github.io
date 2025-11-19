@@ -4,22 +4,22 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      
-      - name: Set up JDK 11
-        uses: actions/setup-java@v3
+      - uses: actions/checkout@v4  # <-- Updated to v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4 # <-- Updated to v4
         with:
-          java-version: '11'
+          java-version: '17'        # <-- Required ng v4 actions
           distribution: 'temurin'
-          
+
       - name: Setup Node
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4 # <-- Updated to v4
         with:
-          node-version: '16'
-          
+          node-version: '20'
+
       - name: Install Cordova
         run: npm install -g cordova
-        
+
       - name: Build App
         run: |
           cordova create app com.dugzhak.pool PinoyPool
@@ -29,9 +29,9 @@ jobs:
           cd app
           cordova platform add android
           cordova build android --release
-          
+
       - name: Upload APK
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4  # <--- ITO ANG SALARIN KANINA (Updated to v4)
         with:
           name: PinoyPool-APK
           path: app/platforms/android/app/build/outputs/apk/release/app-release-unsigned.apk
