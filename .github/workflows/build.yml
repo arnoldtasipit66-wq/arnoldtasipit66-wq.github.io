@@ -11,12 +11,14 @@ jobs:
     steps:
     - uses: actions/checkout@v3
 
+    # Ginamit natin ang Java 11 (Mas stable sa Cordova kaysa 17)
     - name: Setup Java
       uses: actions/setup-java@v3
       with:
         distribution: 'temurin'
-        java-version: '17'
+        java-version: '11'
 
+    # Ginamit natin ang Node 16 (Standard)
     - name: Setup Node.js
       uses: actions/setup-node@v3
       with:
@@ -25,26 +27,25 @@ jobs:
     - name: Install Cordova
       run: npm install -g cordova
 
-    - name: Prepare Project Structure
+    - name: Prepare Project
       run: |
-        # Gumawa ng Cordova Project
+        # Gumawa ng project
         cordova create pinoypool com.dugzhak.pinoypool PinoyPool
         
-        # Linisin ang default files
+        # Linisin at kopyahin ang files mo
         rm -rf pinoypool/www/*
         rm pinoypool/config.xml
-        
-        # Ilipat ang files mo sa loob ng project
         cp index.html pinoypool/www/
         cp config.xml pinoypool/
         
-        # Kung may assets folder ka, kopyahin din
+        # (Optional) Kung may assets, kopyahin (kung wala, okay lang)
         if [ -d "assets" ]; then cp -r assets pinoypool/www/; fi
 
-    - name: Build Android APK
+    - name: Build APK
       run: |
         cd pinoypool
-        cordova platform add android
+        # Idinagdag natin ang specific android version para iwas error
+        cordova platform add android@10.1.2
         cordova build android --release --no-telemetry
         
     - name: Upload APK
