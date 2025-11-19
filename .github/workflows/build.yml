@@ -2,11 +2,13 @@ name: Build APK
 on: push
 jobs:
   build:
-    runs-on: ubuntu-latest
+    # Gamitin natin ang Ubuntu 22.04 dahil stable ito
+    runs-on: ubuntu-22.04
+
     steps:
       - uses: actions/checkout@v4
 
-      # IBALIK NATIN SA JAVA 11 (Ito ang tested na gumagana)
+      # Java 11 ang pinaka-best friend ng Cordova
       - name: Set up JDK 11
         uses: actions/setup-java@v4
         with:
@@ -23,15 +25,22 @@ jobs:
 
       - name: Build App
         run: |
-          cordova create app com.dugzhak.pool PinoyPool
+          # Gumawa ng Project
+          cordova create app com.dugzhak.pinoypool PinoyPool
+          
+          # Kopyahin ang files
           cp index.html app/www/
           cp config.xml app/
+          
+          # Pasukin ang folder
           cd app
-          # Gamitin natin ang Android 11 (Stable sa Java 11)
-          cordova platform add android@11.0.0
-          cordova build android --release --no-telemetry
+          
+          # Gamitin ang Android 10.1.2 (Ito ang pinaka-stable sa lahat)
+          cordova platform add android@10.1.2
+          
+          # Build na!
+          cordova build android --release -- --packageType=apk
 
-      # ITO ANG BAGO: Version 4 na para hindi mag-error
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
