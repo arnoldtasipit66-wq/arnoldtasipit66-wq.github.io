@@ -1,4 +1,4 @@
-name: Android Build
+name: Build APK
 on: [push]
 jobs:
   build:
@@ -13,7 +13,7 @@ jobs:
         with:
           node-version: '16'
       - run: npm install -g cordova
-      - run: cordova create app com.dugzhak.pinoypool PinoyPool
+      - run: cordova create app com.dugzhak.pool PinoyPool
       - run: rm -rf app/www/*
       - run: cp index.html app/www/
       - run: cp config.xml app/
