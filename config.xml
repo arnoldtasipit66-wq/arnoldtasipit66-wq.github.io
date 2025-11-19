@@ -1,0 +1,15 @@
+<?xml version='1.0' encoding='utf-8'?>
+<widget id="com.dugzhak.pinoypool" version="1.0.0" xmlns="http://www.w3.org/ns/widgets" xmlns:cdv="http://cordova.apache.org/ns/1.0">
+    <name>Pinoy Pool</name>
+    <description>A classic Pinoy style pool game.</description>
+    <author email="dugzhak@example.com" href="https://github.com/ArnoldTasipit66-wq">DugZHak</author>
+    <content src="index.html" />
+    <preference name="Orientation" value="landscape" />
+    <preference name="Fullscreen" value="true" />
+    <preference name="BackgroundColor" value="0xffC59D5F" />
+    <plugin name="cordova-plugin-whitelist" spec="1" />
+    <access origin="*" />
+    <allow-intent href="http://*/*" />
+    <allow-intent href="https://*/*" />
+    <platform name="android"><allow-intent href="market:*" /></platform>
+</widget>
