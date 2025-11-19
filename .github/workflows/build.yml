@@ -1,1 +1,54 @@
+name: Build Android APK
 
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Setup Java
+      uses: actions/setup-java@v3
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '16'
+
+    - name: Install Cordova
+      run: npm install -g cordova
+
+    - name: Prepare Project Structure
+      run: |
+        # Gumawa ng Cordova Project
+        cordova create pinoypool com.dugzhak.pinoypool PinoyPool
+        
+        # Linisin ang default files
+        rm -rf pinoypool/www/*
+        rm pinoypool/config.xml
+        
+        # Ilipat ang files mo sa loob ng project
+        cp index.html pinoypool/www/
+        cp config.xml pinoypool/
+        
+        # Kung may assets folder ka, kopyahin din
+        if [ -d "assets" ]; then cp -r assets pinoypool/www/; fi
+
+    - name: Build Android APK
+      run: |
+        cd pinoypool
+        cordova platform add android
+        cordova build android --release --no-telemetry
+        
+    - name: Upload APK
+      uses: actions/upload-artifact@v3
+      with:
+        name: PinoyPool-APK
+        path: pinoypool/platforms/android/app/build/outputs/apk/release/app-release-unsigned.apk
